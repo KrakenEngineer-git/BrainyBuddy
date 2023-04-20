@@ -1,0 +1,18 @@
+cc_library(
+    name = "websocketpp",
+    hdrs = glob(["**/*.hpp"]),
+    includes = ["."],
+    visibility = ["//visibility:public"],
+)
+
+cc_library(
+    name = "asio_tls_transport",
+    hdrs = glob([
+        "websocketpp/transport/asio/security/*.hpp",
+    ]),
+    deps = [
+        ":websocketpp",
+    ],
+    includes = ["."],
+    visibility = ["//visibility:public"],
+)
