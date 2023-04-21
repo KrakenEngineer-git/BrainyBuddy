@@ -16,17 +16,6 @@ namespace websocket_handler {
     class WebsocketClientHandler : public WebsocketClientBase {
 
     public:
-        enum class MessageStatus
-        {
-            NONE,
-            NOT_SENT,
-            SENT_SUCCESS,
-            SENT_FAILURE,
-            NOT_RECEIVED,
-            RECEIVED_SUCCESS,
-            RECEIVED_FAILURE
-        };
-
         WebsocketClientHandler(const std::string& bot_token);
         ~WebsocketClientHandler();
 
@@ -40,7 +29,7 @@ namespace websocket_handler {
     private:
         void on_open(websocketpp::connection_hdl hdl);
         websocketpp::connection_hdl m_hdl;
-        WebsocketClient *client_ptr; 
+        std::unique_ptr<WebsocketClient> client_ptr;
         std::mutex m_client_handler_mutex;
         InitializationStatus current_init_status;
         const std::string bot_token_;

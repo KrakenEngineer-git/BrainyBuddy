@@ -10,6 +10,7 @@ cc_library(
     deps = [
         "@websocketpp//:websocketpp",
         "//WebSocketHandler:websocket_client_base",
+        "//utilities",
     ],
     linkopts = ["-lssl", "-lcrypto"],
     copts = ["-std=c++11"],

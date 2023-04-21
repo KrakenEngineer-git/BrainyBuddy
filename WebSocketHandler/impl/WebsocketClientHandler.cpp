@@ -1,14 +1,17 @@
 #include "WebsocketClientHandler.hpp"
 
+#include "utilities/utilities.hpp"
+
 namespace websocket_handler {
 
-    WebsocketClientHandler::WebsocketClientHandler(const std::string& bot_token): client_ptr(new WebsocketClient()), bot_token_(bot_token)
+
+    WebsocketClientHandler::WebsocketClientHandler(const std::string& bot_token): client_ptr(make_unique<WebsocketClient>()), bot_token_(bot_token)
     {
         init();
     }
     WebsocketClientHandler::~WebsocketClientHandler()
     {
-        delete client_ptr;
+        delete client_ptr.get();
     }
 
     WebsocketClientHandler::InitializationStatus WebsocketClientHandler::init()
