@@ -3,10 +3,13 @@ cc_binary(
     srcs = ["main.cpp"],
     deps = [
         "@websocketpp//:websocketpp",
+        "@nlohmann_json//:nlohmann_json", 
         "//WebSocketHandler/impl:websocket_handler_lib",
-        "//DiscordEventHandler:discord_event_handler",
+        "//DiscordClient:discord_client",
+    ],
+    copts = [
+        "-Iexternal/nlohmann_json/include",
     ],
     linkopts = ["-lssl", "-lcrypto"],
-    copts = ["-std=c++11"],
     visibility = ["//visibility:public"],
 )

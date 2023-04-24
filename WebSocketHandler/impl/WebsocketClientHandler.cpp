@@ -5,7 +5,7 @@
 namespace websocket_handler {
 
 
-    WebsocketClientHandler::WebsocketClientHandler(const std::string& bot_token): client_ptr(make_unique<WebsocketClient>()), bot_token_(bot_token)
+    WebsocketClientHandler::WebsocketClientHandler(): client_ptr(make_unique<WebsocketClient>())
     {
         init();
     }
@@ -36,7 +36,7 @@ namespace websocket_handler {
         return current_init_status;
     }
 
-    void WebsocketClientHandler::connect(const std::string& uri)
+    void WebsocketClientHandler::connect(const std::string& uri, const std::map<std::string, std::string>& headers)
     {
         std::lock_guard<std::mutex> lock(m_client_handler_mutex);
         try {
@@ -44,7 +44,10 @@ namespace websocket_handler {
 
             // Add the bot token to the connection request headers
             client::connection_ptr con = client_ptr->get_client().get_connection(uri, ec);
-            con->append_header("Authorization", "Bot " + bot_token_);
+            
+            for (const auto& header : headers) {
+                con->append_header(header.first, header.second);
+            }
 
             if (ec) {
                 std::cout << "Error creating connection: " << ec.message() << std::endl;

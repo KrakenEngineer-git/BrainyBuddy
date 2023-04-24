@@ -1,5 +1,4 @@
-#include "WebSocketHandler/impl/WebsocketClient.hpp"
-#include "WebSocketHandler/impl/WebsocketClientHandler.hpp"
+#include "DiscordClient/DiscordClient.hpp"
 #include <cstdlib>
 #include <iostream>
 #include <memory>
@@ -13,9 +12,12 @@ int main()
         return 0 ;
     }
     std::string token(token_env_var);
-    websocket_handler::WebsocketClientHandler handler(token);
-    handler.connect("wss://gateway.discord.gg/?v=9&encoding=json");
-    handler.send("Hello World!");
+
+    discord::DiscordEvents::ResponseCallback response_callback = [](const std::string& content) { return "test"; };
+
+    discord::DiscordClient discord_client(token, response_callback);
+    discord_client.connect("wss://gateway.discord.gg/?v=9&encoding=json");
+    discord_client.send("Hello World!");
 
     return 0;
 }

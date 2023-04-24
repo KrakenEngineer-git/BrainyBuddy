@@ -16,13 +16,15 @@ namespace websocket_handler {
     class WebsocketClientHandler : public WebsocketClientBase {
 
     public:
-        WebsocketClientHandler(const std::string& bot_token);
+        WebsocketClientHandler();
         ~WebsocketClientHandler();
 
         InitializationStatus init() override;
-        void connect(const std::string& uri);
+        void connect(const std::string& uri, const std::map<std::string, std::string>& headers);
         void send(const std::string& message);
         void receive(websocketpp::connection_hdl, client::message_ptr msg);
+
+        
         
 
 
@@ -32,7 +34,6 @@ namespace websocket_handler {
         std::unique_ptr<WebsocketClient> client_ptr;
         std::mutex m_client_handler_mutex;
         InitializationStatus current_init_status;
-        const std::string bot_token_;
     };
 
 }

@@ -4,11 +4,12 @@
 #include <string>
 #include <functional>
 #include <unordered_map>
-#include "nlohmann/json.hpp"
+#include <nlohmann/json.hpp>
+#include "DiscordEvents.hpp"
 
 namespace discord {
 
-class DiscordEventHandler {
+class DiscordEventHandler : public DiscordEvents {
 public:
     using event_handler_t = std::function<void(const nlohmann::json&)>;
 

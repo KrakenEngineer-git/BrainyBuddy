@@ -6,7 +6,6 @@ void DiscordEventHandler::register_event_handler(const std::string& event_name, 
     event_handlers_[event_name] = handler;
 }
 
-// Function checking if the structur of payload is correct
 void DiscordEventHandler::handle_event(const std::string& payload, std::function<void(const std::string&)> error_handler) {
     try {
         auto json_payload = nlohmann::json::parse(payload);
@@ -14,12 +13,12 @@ void DiscordEventHandler::handle_event(const std::string& payload, std::function
         const auto& op_code = json_payload["op"];
         if (op_code.is_null()) {
             error_handler("Invalid op code");
-            return ;
+            return;
         }
         const auto& event_type = json_payload["t"];
         if (event_type.is_null()) {
             error_handler("Invalid event type");
-            return ;
+            return;
         }
         const auto& handler = event_handlers_.find(event_type);
         if (handler != event_handlers_.end()) {

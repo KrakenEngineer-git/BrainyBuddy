@@ -10,13 +10,38 @@
 #include <atomic>
 #include <condition_variable>
 
+#include "WebSocketHandler/impl/WebsocketClientHandler.hpp"
 #include "DiscordEventHandler/DiscordEventHandler.hpp"
+#include "utilities/utilities.hpp"
 
 namespace discord {
 
 class DiscordClient {
 
 public:
+    DiscordClient(const std::string& bot_token, DiscordEvents::ResponseCallback response_callback);
+    ~DiscordClient() = default;
+
+    std::map<std::string, std::string> headers = {
+        {"Authorization", "Bot " + bot_token_}
+    };
+    
+    void connect(const std::string& uri);
+
+    void send(const std::string& message);
+
+private:
+    std::unique_ptr<websocket_handler::WebsocketClientHandler> client_handler_ptr;
+    const std::string bot_token_;
+    unsigned int worker_threads_count_;
+    std::vector<std::thread> worker_threads_;
+    std::queue<nlohmann::json> event_queue_;
+    std::mutex mutex_;
+    std::condition_variable cv_;
+    DiscordEvents::ResponseCallback response_callback_;
+    discord::DiscordEventHandler event_handler_;
 };
 
 } // namespace discord
+
+#endif // DISCORD_CLIENT_HPP
