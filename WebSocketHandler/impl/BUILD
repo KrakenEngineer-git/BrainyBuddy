@@ -8,11 +8,15 @@ cc_library(
     ],
     includes = ["*"],
     deps = [
+        "@nlohmann_json//:nlohmann_json", 
         "@websocketpp//:websocketpp",
         "//WebSocketHandler:websocket_client_base",
         "//utilities",
     ],
     linkopts = ["-lssl", "-lcrypto"],
-    copts = ["-std=c++11"],
+    copts = [
+        "-std=c++11",
+        "-Iexternal/nlohmann_json/include",
+    ],
     visibility = ["//visibility:public"],
 )
