@@ -16,6 +16,11 @@ namespace websocket_handler {
     class WebsocketClientHandler : public WebsocketClientBase {
 
     public:
+
+        using MessageCallback = std::function<void(const std::string&)>;
+        using IdentifyCallback = std::function<void()>;
+        using HeartbeatCallback = std::function<void(int interval_ms)>;
+
         WebsocketClientHandler();
         ~WebsocketClientHandler();
 
@@ -23,10 +28,12 @@ namespace websocket_handler {
         void connect(const std::string& uri, const std::map<std::string, std::string>& headers);
         void send(const std::string& message);
         void receive(websocketpp::connection_hdl, client::message_ptr msg);
-
-        
-        
-
+        void on_close(websocketpp::connection_hdl hdl);
+        void set_message_callback(MessageCallback callback);
+        void on_fail(websocketpp::connection_hdl hdl);
+        void set_identify_callback(IdentifyCallback callback);
+        void set_heartbeat_callback(HeartbeatCallback callback);
+        bool is_connected();
 
     private:
         void on_open(websocketpp::connection_hdl hdl);
@@ -34,6 +41,9 @@ namespace websocket_handler {
         std::unique_ptr<WebsocketClient> client_ptr;
         std::mutex m_client_handler_mutex;
         InitializationStatus current_init_status;
+        MessageCallback message_callback_;
+        IdentifyCallback identify_callback_;
+        HeartbeatCallback heartbeat_callback_;
     };
 
 }

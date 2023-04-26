@@ -9,7 +9,7 @@ namespace websocket_handler {
         std::lock_guard<std::mutex> lock(m_client_mutex);
         try
         {
-            ssl_context_ptr = websocketpp::lib::make_shared<boost::asio::ssl::context>(boost::asio::ssl::context::tlsv12);
+            ssl_context_ptr = websocketpp::lib::make_shared<boost::asio::ssl::context>(boost::asio::ssl::context::tlsv12_client);
             m_client.init_asio();
             current_init_status = InitializationStatus::INITIALIZATION_SUCCESS;
         }
