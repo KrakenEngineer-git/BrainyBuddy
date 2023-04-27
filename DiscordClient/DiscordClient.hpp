@@ -33,7 +33,7 @@ public:
 
 
 private:
-    //void send_message(const std::string& channel_id, const std::string& conten);
+   // void send_message(const std::string& channel_id, const std::string& content);
     void start_heartbeat_thread(int interval_ms);
     void start_identify_thread();
     std::unique_ptr<websocket_handler::WebsocketClientHandler> client_handler_ptr;

@@ -1,5 +1,6 @@
 #include "DiscordClient.hpp"
-
+// #include <curl/curl.h>
+// #include <sstream>
 namespace discord 
 {
     DiscordClient::DiscordClient(const std::string& bot_token, DiscordEvents::ResponseCallback response_callback)
@@ -35,37 +36,53 @@ namespace discord
             start_identify_thread();
         });
 
+
+        client_handler_ptr->set_message_callback([this](const std::string& message_payload) {
+            event_handler_.handle_event(message_payload, [](const std::string& error_message) {
+                std::cerr << "Error handling event: " << error_message << std::endl;
+            });
+        });
+
         event_handler_.register_event_handler("MESSAGE_CREATE", [this](const nlohmann::json& data) {
             std::unique_lock<std::mutex> lock(mutex_);
             event_queue_.push(data);
             lock.unlock();
             cv_.notify_one();
         });
+        
+        for (unsigned int i = 0; i < worker_threads_count_; ++i) {
+            worker_threads_.emplace_back([this]() {
+                while (true) {
+                    std::unique_lock<std::mutex> lock(mutex_);
+                    cv_.wait(lock, [this]() { return !event_queue_.empty() || stop_threads_; });
 
-        //To be fixed with rest api
-        // // Create worker threads
-        // for (unsigned int i = 0; i < worker_threads_count_; ++i) {
-        //     worker_threads_.emplace_back([this]() {
-        //         while (true) {
-        //             std::unique_lock<std::mutex> lock(mutex_);
-        //             cv_.wait(lock, [this]() { return !event_queue_.empty() || stop_threads_; });
+                    if (stop_threads_) {
+                        break;
+                    }
 
-        //             if (stop_threads_) {
-        //                 break;
-        //             }
+                    nlohmann::json event_data = event_queue_.front();
+                    event_queue_.pop();
+                    lock.unlock();
+                    // Check if the "content" value is not null before accessing it
+                    if (!event_data["d"]["content"].is_null()) {
+                        // Extract message content and channel ID from the event_data
+                        std::string message_content = event_data["d"]["content"].get<std::string>();
+                        std::string channel_id = event_data["d"]["channel_id"].get<std::string>();
+                        std::cout << "Message Content " << message_content << std::endl;
 
-        //             nlohmann::json event_data = event_queue_.front();
-        //             event_queue_.pop();
-        //             lock.unlock();
+                        if (!message_content.empty()) {
+                        // Invoke your response_callback_, passing the message content as argument
+                            std::string response = response_callback_(message_content);
 
-        //             nlohmann::json response = event_handler_.on_message_create(event_data, response_callback_);
-
-        //             if (!response.empty()) {
-        //                 client_handler_ptr->send(response);
-        //             }
-        //         }
-        //     });
-        // }
+                            // If the response is not empty, send the response message to the same channel
+                            if (!response.empty()) {
+                                // send_message(channel_id, response);
+                            }
+                        }
+                    }
+                }
+            });
+        }
         std::cout << "Discord bot connected" << std::endl;
     }
 
@@ -93,7 +110,7 @@ namespace discord
                 {"op", 2},
                 {"d", {
                     {"token", bot_token_},
-                    {"intents", 1 << 9}, // Add the GUILD_MESSAGES intent
+                    {"intents", (1 << 9) | (1 << 15)}, // Add the GUILD_MESSAGES and MESSAGE_CONTENT intents
                     {"properties", {
                         {"$os", "linux"},
                         {"$browser", "disco"},
@@ -117,19 +134,40 @@ namespace discord
         client_handler_ptr->send(message);
     }
 
-    //To be fixed with RestApi
+    static size_t write_callback(void* contents, size_t size, size_t nmemb, void* userp) {
+        ((std::stringstream*)userp)->write((char*)contents, size * nmemb);
+        return size * nmemb;
+    }
 
     // void DiscordClient::send_message(const std::string& channel_id, const std::string& content) {
-    //     nlohmann::json payload{
-    //         {"op", 8},
-    //         {"t", "MESSAGE_CREATE"},
-    //         {"d", {
-    //             {"content", content},
-    //             {"channel_id", channel_id}
-    //         }}
-    //     };
+    //     std::string url = "https://discord.com/api/v10/channels/" + channel_id + "/messages";
+    //     std::stringstream response;
 
-    //     std::string payload_str = payload.dump();
-    //     client_handler_ptr->send(payload_str);
+    //     CURL* curl = curl_easy_init();
+    //     if (curl) {
+    //         struct curl_slist* headers = NULL;
+    //         headers = curl_slist_append(headers, "Content-Type: application/json");
+    //         std::string auth_header = "Authorization: Bot " + bot_token_;
+    //         headers = curl_slist_append(headers, auth_header.c_str());
+
+    //         nlohmann::json payload{
+    //             {"content", content}
+    //         };
+    //         std::string payload_str = payload.dump();
+
+    //         curl_easy_setopt(curl, CURLOPT_URL, url.c_str());
+    //         curl_easy_setopt(curl, CURLOPT_WRITEFUNCTION, write_callback);
+    //         curl_easy_setopt(curl, CURLOPT_WRITEDATA, &response);
+    //         curl_easy_setopt(curl, CURLOPT_POSTFIELDS, payload_str.c_str());
+    //         curl_easy_setopt(curl, CURLOPT_HTTPHEADER, headers);
+
+    //         CURLcode res = curl_easy_perform(curl);
+    //         if (res != CURLE_OK) {
+    //             std::cerr << "curl_easy_perform() failed: " << curl_easy_strerror(res) << std::endl;
+    //         }
+
+    //         curl_easy_cleanup(curl);
+    //         curl_slist_free_all(headers);
+    //     }
     // }
 }

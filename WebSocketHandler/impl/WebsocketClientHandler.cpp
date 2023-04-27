@@ -102,12 +102,15 @@ namespace websocket_handler {
         }
     }
 
-    void WebsocketClientHandler::receive(websocketpp::connection_hdl, client::message_ptr msg) {
-        std::cout << "Received: " << msg->get_payload() << std::endl;
-
+    void WebsocketClientHandler::receive(websocketpp::connection_hdl, client::message_ptr msg) 
+    {
+        std::string raw_payload = msg->get_payload();
+        std::cout << "Received raw payload: " << raw_payload << std::endl;
         auto payload = nlohmann::json::parse(msg->get_payload());
 
-        if (payload["op"] == 10) { // Opcode 10: Hello
+        if (payload["op"] == 11) {
+            std::cout << "Received Heartbeat Acknowledgement" << std::endl;
+        } else if (payload["op"] == 10) { // Opcode 10: Hello
             int heartbeat_interval = payload["d"]["heartbeat_interval"];
             if (heartbeat_callback_) {
                 heartbeat_callback_(heartbeat_interval);
@@ -117,7 +120,7 @@ namespace websocket_handler {
             std::cout << "Received READY event" << std::endl;
         }
 
-        if (message_callback_) {
+        if (message_callback_ && !payload["t"].is_null()) {
             message_callback_(msg->get_payload());
         }
     }
