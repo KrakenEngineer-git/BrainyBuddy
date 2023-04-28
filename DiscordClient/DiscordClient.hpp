@@ -33,9 +33,9 @@ public:
 
 
 private:
-   // void send_message(const std::string& channel_id, const std::string& content);
     void start_heartbeat_thread(int interval_ms);
     void start_identify_thread();
+    void handle_payload(const std::string& raw_payload);
     std::unique_ptr<websocket_handler::WebsocketClientHandler> client_handler_ptr;
     const std::string bot_token_;
     unsigned int worker_threads_count_;

@@ -16,34 +16,37 @@ namespace websocket_handler {
     class WebsocketClientHandler : public WebsocketClientBase {
 
     public:
-
-        using MessageCallback = std::function<void(const std::string&)>;
         using IdentifyCallback = std::function<void()>;
-        using HeartbeatCallback = std::function<void(int interval_ms)>;
+        using PayloadCallback = std::function<void(const std::string&)>;
+        using ReconnectCallback = std::function<void()>;
+
 
         WebsocketClientHandler();
         ~WebsocketClientHandler();
 
-        InitializationStatus init() override;
         void connect(const std::string& uri, const std::map<std::string, std::string>& headers);
         void send(const std::string& message);
         void receive(websocketpp::connection_hdl, client::message_ptr msg);
         void on_close(websocketpp::connection_hdl hdl);
-        void set_message_callback(MessageCallback callback);
         void on_fail(websocketpp::connection_hdl hdl);
         void set_identify_callback(IdentifyCallback callback);
-        void set_heartbeat_callback(HeartbeatCallback callback);
+        void set_payload_callback(PayloadCallback callback);
+        void set_reconnect_callback(ReconnectCallback callback);
+        void WebsocketClientHandler::reconnect();
         bool is_connected();
 
     private:
+        void close_connection();
+        std::atomic<int> reconnect_delay;
+        ReconnectCallback reconnect_callback_;
+        InitializationStatus init() override;
         void on_open(websocketpp::connection_hdl hdl);
         websocketpp::connection_hdl m_hdl;
         std::unique_ptr<WebsocketClient> client_ptr;
         std::mutex m_client_handler_mutex;
         InitializationStatus current_init_status;
-        MessageCallback message_callback_;
         IdentifyCallback identify_callback_;
-        HeartbeatCallback heartbeat_callback_;
+        PayloadCallback payload_callback_;
     };
 
 }

@@ -28,19 +28,17 @@ namespace discord
     void DiscordClient::connect(const std::string& uri) {
         client_handler_ptr->connect(uri, headers);
 
-        client_handler_ptr->set_heartbeat_callback([this](int interval_ms) {
-            start_heartbeat_thread(interval_ms);
+        client_handler_ptr->set_reconnect_callback([this, uri]() {
+            std::cout << "Reconnecting..." << std::endl;
+            connect(uri);
         });
-
+        
         client_handler_ptr->set_identify_callback([this]() {
             start_identify_thread();
         });
 
-
-        client_handler_ptr->set_message_callback([this](const std::string& message_payload) {
-            event_handler_.handle_event(message_payload, [](const std::string& error_message) {
-                std::cerr << "Error handling event: " << error_message << std::endl;
-            });
+        client_handler_ptr->set_payload_callback([this](const std::string& payload) {
+            handle_payload(payload);
         });
 
         event_handler_.register_event_handler("MESSAGE_CREATE", [this](const nlohmann::json& data) {
@@ -64,19 +62,19 @@ namespace discord
                     event_queue_.pop();
                     lock.unlock();
                     // Check if the "content" value is not null before accessing it
-                    if (!event_data["d"]["content"].is_null()) {
+                    if (!event_data["content"].is_null()) {
                         // Extract message content and channel ID from the event_data
-                        std::string message_content = event_data["d"]["content"].get<std::string>();
-                        std::string channel_id = event_data["d"]["channel_id"].get<std::string>();
-                        std::cout << "Message Content " << message_content << std::endl;
+                        std::string message_content = event_data["content"].get<std::string>();
+                        std::string channel_id = event_data["channel_id"].get<std::string>();
+                        std::cout << event_data["author"]["username"].get<std::string>() << " send: " << message_content << std::endl;
 
-                        if (!message_content.empty()) {
-                        // Invoke your response_callback_, passing the message content as argument
-                            std::string response = response_callback_(message_content);
-
+                        if (!message_content.empty() && !channel_id.empty()) {
+                            // Invoke your on_message_create function, passing the response as argument
+                            nlohmann::json response = event_handler_.on_message_create(event_data,response_callback_);
                             // If the response is not empty, send the response message to the same channel
                             if (!response.empty()) {
-                                // send_message(channel_id, response);
+                                std::cout << response << std::endl;
+                                // Handle message sending
                             }
                         }
                     }
@@ -86,8 +84,25 @@ namespace discord
         std::cout << "Discord bot connected" << std::endl;
     }
 
+    void DiscordClient::handle_payload(const std::string& raw_payload) {
+        auto payload = nlohmann::json::parse(raw_payload);
+
+        if (payload["op"] == 11) {
+            std::cout << "Received Heartbeat Acknowledgement" << std::endl;
+        } else if (payload["op"] == 10) { // Opcode 10: Hello
+            int heartbeat_interval = payload["d"]["heartbeat_interval"];
+            start_heartbeat_thread(heartbeat_interval);
+        } else if (payload["t"] == "READY") {
+            std::cout << "Received READY event" << std::endl;
+        } else {
+            event_handler_.handle_event(raw_payload, [](const std::string& error_message) {
+                std::cerr << "Error handling event: " << error_message << std::endl;
+            });
+        }
+    }
+    
     void DiscordClient::start_heartbeat_thread(int interval_ms) {
-        std::cout<<"Trying to heartbeat"<<std::endl;
+        std::cout << "Trying to heartbeat" << std::endl;
         std::thread([this, interval_ms]() {
             while (!stop_threads_) {
                 std::this_thread::sleep_for(std::chrono::milliseconds(interval_ms));
@@ -104,7 +119,7 @@ namespace discord
     }
 
     void DiscordClient::start_identify_thread() {
-        std::cout<<"Trying to identify"<<std::endl;
+        std::cout << "Trying to identify" << std::endl;
         std::thread([this]() {
             nlohmann::json identify_payload{
                 {"op", 2},
@@ -133,41 +148,4 @@ namespace discord
     {
         client_handler_ptr->send(message);
     }
-
-    static size_t write_callback(void* contents, size_t size, size_t nmemb, void* userp) {
-        ((std::stringstream*)userp)->write((char*)contents, size * nmemb);
-        return size * nmemb;
-    }
-
-    // void DiscordClient::send_message(const std::string& channel_id, const std::string& content) {
-    //     std::string url = "https://discord.com/api/v10/channels/" + channel_id + "/messages";
-    //     std::stringstream response;
-
-    //     CURL* curl = curl_easy_init();
-    //     if (curl) {
-    //         struct curl_slist* headers = NULL;
-    //         headers = curl_slist_append(headers, "Content-Type: application/json");
-    //         std::string auth_header = "Authorization: Bot " + bot_token_;
-    //         headers = curl_slist_append(headers, auth_header.c_str());
-
-    //         nlohmann::json payload{
-    //             {"content", content}
-    //         };
-    //         std::string payload_str = payload.dump();
-
-    //         curl_easy_setopt(curl, CURLOPT_URL, url.c_str());
-    //         curl_easy_setopt(curl, CURLOPT_WRITEFUNCTION, write_callback);
-    //         curl_easy_setopt(curl, CURLOPT_WRITEDATA, &response);
-    //         curl_easy_setopt(curl, CURLOPT_POSTFIELDS, payload_str.c_str());
-    //         curl_easy_setopt(curl, CURLOPT_HTTPHEADER, headers);
-
-    //         CURLcode res = curl_easy_perform(curl);
-    //         if (res != CURLE_OK) {
-    //             std::cerr << "curl_easy_perform() failed: " << curl_easy_strerror(res) << std::endl;
-    //         }
-
-    //         curl_easy_cleanup(curl);
-    //         curl_slist_free_all(headers);
-    //     }
-    // }
 }

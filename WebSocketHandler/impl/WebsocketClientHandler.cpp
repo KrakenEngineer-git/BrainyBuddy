@@ -7,7 +7,7 @@
 namespace websocket_handler {
 
 
-    WebsocketClientHandler::WebsocketClientHandler(): client_ptr(make_unique<WebsocketClient>())
+    WebsocketClientHandler::WebsocketClientHandler(): client_ptr(make_unique<WebsocketClient>()),  reconnect_delay(5000)
     {
         init();
     }
@@ -44,6 +44,12 @@ namespace websocket_handler {
         client_ptr->get_client().stop_perpetual();
         client_ptr->get_client().close(m_hdl, websocketpp::close::status::normal, "Closing connection");
     }
+    void WebsocketClientHandler::close_connection() {
+        // Stop any ongoing reconnect attempts
+        reconnect_callback_ = nullptr;
+        std::lock_guard<std::mutex> lock(m_client_handler_mutex);
+        client_ptr->get_client().close(m_hdl, websocketpp::close::status::normal, "Closing connection");
+    }
     
     void WebsocketClientHandler::connect(const std::string& uri, const std::map<std::string, std::string>& headers)
     {
@@ -77,6 +83,15 @@ namespace websocket_handler {
         }
     }
 
+    void WebsocketClientHandler::reconnect() 
+    {
+        std::this_thread::sleep_for(std::chrono::milliseconds(reconnect_delay));
+        if (reconnect_callback_) 
+        {
+            reconnect_callback_();
+        }
+    }
+
     void WebsocketClientHandler::on_open(websocketpp::connection_hdl hdl) {
         std::cout << "WebSocket connection opened" << std::endl;
         m_hdl = hdl;
@@ -86,6 +101,7 @@ namespace websocket_handler {
     }
     void WebsocketClientHandler::on_close(websocketpp::connection_hdl hdl) {
         std::cout << "WebSocket connection closed" << std::endl;
+        reconnect();
     }
     void WebsocketClientHandler::send(const std::string& message) {
         std::lock_guard<std::mutex> lock(m_client_handler_mutex);
@@ -105,40 +121,26 @@ namespace websocket_handler {
     void WebsocketClientHandler::receive(websocketpp::connection_hdl, client::message_ptr msg) 
     {
         std::string raw_payload = msg->get_payload();
-        std::cout << "Received raw payload: " << raw_payload << std::endl;
-        auto payload = nlohmann::json::parse(msg->get_payload());
-
-        if (payload["op"] == 11) {
-            std::cout << "Received Heartbeat Acknowledgement" << std::endl;
-        } else if (payload["op"] == 10) { // Opcode 10: Hello
-            int heartbeat_interval = payload["d"]["heartbeat_interval"];
-            if (heartbeat_callback_) {
-                heartbeat_callback_(heartbeat_interval);
-            }  
-        } else if (payload["t"] == "READY") {
-            // Handle the READY event here
-            std::cout << "Received READY event" << std::endl;
+        if (payload_callback_) {
+            payload_callback_(raw_payload);
         }
-
-        if (message_callback_ && !payload["t"].is_null()) {
-            message_callback_(msg->get_payload());
-        }
-    }
-
-    void WebsocketClientHandler::set_message_callback(MessageCallback callback) {
-        message_callback_ = std::move(callback);
     }
 
     void WebsocketClientHandler::on_fail(websocketpp::connection_hdl hdl) {
         std::cout << "WebSocket connection failed" << std::endl;
+        reconnect();
     }
 
     void WebsocketClientHandler::set_identify_callback(IdentifyCallback callback) {
         identify_callback_ = std::move(callback);
     }
 
-    void WebsocketClientHandler::set_heartbeat_callback(HeartbeatCallback callback) {
-        heartbeat_callback_ = std::move(callback);
+    void WebsocketClientHandler::set_payload_callback(PayloadCallback callback) {
+        payload_callback_ = std::move(callback);
+    }
+
+    void WebsocketClientHandler::set_reconnect_callback(ReconnectCallback callback) {
+        reconnect_callback_ = std::move(callback);
     }
 
     bool WebsocketClientHandler::is_connected() 
