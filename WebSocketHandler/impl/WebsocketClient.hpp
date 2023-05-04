@@ -3,36 +3,45 @@
 
 #include <websocketpp/config/asio_client.hpp>
 #include <websocketpp/client.hpp>
-#include "WebSocketHandler/WebsocketClientBase.hpp"
-
-#include <iostream>
+#include <functional>
 #include <mutex>
+#include <iostream>
 #include <memory>
 
-namespace websocket_handler {
+typedef websocketpp::client<websocketpp::config::asio_tls_client> client;
+class WebsocketClient {
+public:
+    WebsocketClient();
+    ~WebsocketClient();
 
-    typedef websocketpp::client<websocketpp::config::asio_tls_client> client;
+protected:
+    typedef std::function<void(const std::string&)> MessageHandler;
+    typedef std::function<void()> ConnectionHandler;
+    typedef std::function<void(int, const std::string&)> CloseHandler;
+    typedef std::function<void(const std::string& error_message)> ErrorHandler;
 
-    class WebsocketClient : public WebsocketClientBase{
+    virtual void set_message_handler(MessageHandler handler) = 0;
+    virtual void set_open_handler(ConnectionHandler handler) = 0;
+    virtual void set_close_handler(CloseHandler handler) = 0;
+    virtual void set_fail_handler(ConnectionHandler handler) = 0;
+    virtual void set_error_handler(ErrorHandler handler) = 0;
 
-    public:
+    client ws_client_;
+    websocketpp::connection_hdl connection_hdl_;
+    websocketpp::lib::shared_ptr<boost::asio::ssl::context> mSslContext;
+    void on_message(websocketpp::connection_hdl, client::message_ptr msg);
+    void on_open(websocketpp::connection_hdl hdl);
+    void on_close(websocketpp::connection_hdl hdl);
+    void on_fail(websocketpp::connection_hdl hdl);
 
-        WebsocketClient() : current_init_status(InitializationStatus::NOT_INITIALIZED) {};
+    MessageHandler message_handler_;
+    ConnectionHandler open_handler_;
+    CloseHandler close_handler_;
+    ConnectionHandler fail_handler_;
+    ErrorHandler error_handler_;
 
-        InitializationStatus init() override;
-
-        websocketpp::lib::shared_ptr<boost::asio::ssl::context> get_ssl_context_ptr(websocketpp::connection_hdl hdl);
-
-        client& get_client();
-
-    private:
-        client m_client;
-        std::mutex m_client_mutex;
-        websocketpp::lib::shared_ptr<boost::asio::ssl::context> ssl_context_ptr;
-        InitializationStatus current_init_status;
-    };
-
-}
+private:
+    std::mutex connection_mutex_;
+};
 
 #endif //WEBSOCKET_HANDLER_IMPL_WEBSOCKETCLIENT_HPP
-

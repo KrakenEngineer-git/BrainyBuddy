@@ -1,22 +1,18 @@
 #include "DiscordClient.hpp"
-
+// #include <curl/curl.h>
+// #include <sstream>
 namespace discord 
 {
     DiscordClient::DiscordClient(const std::string& bot_token, DiscordEvents::ResponseCallback response_callback)
-        : bot_token_(bot_token), worker_threads_count_(4), response_callback_(response_callback), stop_threads_(false)
-    {
-        try
-        {
+        : bot_token_(bot_token), worker_threads_count_(4), response_callback_(response_callback), stop_threads_(false) {
+        try {
             client_handler_ptr = make_unique<websocket_handler::WebsocketClientHandler>();
-        }
-        catch(const std::exception& e)
-        {
+        } catch (const std::exception& e) {
             std::cerr << e.what() << '\n';
         }
     }
 
-    DiscordClient::~DiscordClient()
-    {
+    DiscordClient::~DiscordClient() {
         stop_threads_ = true;
         cv_.notify_all();
         for (auto& thread : worker_threads_) {
@@ -26,51 +22,125 @@ namespace discord
 
     void DiscordClient::connect(const std::string& uri) {
         client_handler_ptr->connect(uri, headers);
+        setup_handlers(uri);
+        setup_event_handler();
+        start_worker_threads();
+    }
 
-        client_handler_ptr->set_heartbeat_callback([this](int interval_ms) {
-            start_heartbeat_thread(interval_ms);
-        });
-
-        client_handler_ptr->set_identify_callback([this]() {
+    void DiscordClient::setup_handlers(const std::string& uri) 
+    {
+        client_handler_ptr->set_open_handler([this]() {
             start_identify_thread();
         });
 
-        event_handler_.register_event_handler("MESSAGE_CREATE", [this](const nlohmann::json& data) {
-            std::unique_lock<std::mutex> lock(mutex_);
-            event_queue_.push(data);
-            lock.unlock();
-            cv_.notify_one();
+        client_handler_ptr->set_fail_handler([this, uri]() {
+            std::cout << "Reconnecting..." << std::endl;
+            reconnect(uri);
         });
 
-        //To be fixed with rest api
-        // // Create worker threads
-        // for (unsigned int i = 0; i < worker_threads_count_; ++i) {
-        //     worker_threads_.emplace_back([this]() {
-        //         while (true) {
-        //             std::unique_lock<std::mutex> lock(mutex_);
-        //             cv_.wait(lock, [this]() { return !event_queue_.empty() || stop_threads_; });
+        client_handler_ptr->set_error_handler([this, uri](const std::string& error_message) {
+            std::cerr << "WebSocket Error: " << error_message << std::endl;
+            reconnect(uri);
+        });
 
-        //             if (stop_threads_) {
-        //                 break;
-        //             }
+        client_handler_ptr->set_message_handler([this](const std::string& payload) {
+            handle_payload(payload);
+        });
 
-        //             nlohmann::json event_data = event_queue_.front();
-        //             event_queue_.pop();
-        //             lock.unlock();
+        client_handler_ptr->set_close_handler([this, uri](int status, const std::string& reason) {
+            std::cout << "WebSocket connection closed with status " << status << " and reason: " << reason << std::endl;
+            std::cout << "Reconnecting..." << std::endl;
+            reconnect(uri);
+        });
+    }
 
-        //             nlohmann::json response = event_handler_.on_message_create(event_data, response_callback_);
+    void DiscordClient::setup_event_handler() 
+    {
+        event_handler_.register_event_handler("MESSAGE_CREATE", [this](const nlohmann::json& data) {
 
-        //             if (!response.empty()) {
-        //                 client_handler_ptr->send(response);
-        //             }
-        //         }
-        //     });
-        // }
+            nlohmann::json response = event_handler_.on_message_create(data, response_callback_);
+
+            if (!response.empty()) {
+                std::unique_lock<std::mutex> lock(mutex_);
+                event_queue_.push(response);
+                lock.unlock();
+                cv_.notify_one();
+            }
+        });
+
+        event_handler_.register_event_handler("MESSAGE_UPDATE", [this](const nlohmann::json& data) {
+
+            nlohmann::json updatedResponse = event_handler_.on_message_update(data);
+
+            if (updatedResponse.is_null()) {
+                std::cerr << "Error: on_message_update returned a null JSON object" << std::endl;
+                return;
+            }
+
+            nlohmann::json response = event_handler_.on_message_create(updatedResponse, response_callback_);
+
+            if (!response.empty()) {
+                std::unique_lock<std::mutex> lock(mutex_);
+                event_queue_.push(response);
+                lock.unlock();
+                cv_.notify_one();
+            }
+        });
+
+
+        event_handler_.register_event_handler("MESSAGE_DELETE", [this](const nlohmann::json& data) {
+            event_handler_.on_message_delete(data);
+        });
+    }
+
+    void DiscordClient::start_worker_threads()
+    {
+        for (unsigned int i = 0; i < worker_threads_count_; ++i) {
+            worker_threads_.emplace_back([this]() {
+                while (true) {
+                    std::unique_lock<std::mutex> lock(mutex_);
+                    cv_.wait(lock, [this]() { return !event_queue_.empty() || stop_threads_; });
+
+                    if (stop_threads_) {
+                        break;
+                    }
+
+                    nlohmann::json event_data = event_queue_.front();
+                    event_queue_.pop();
+                    lock.unlock();
+                    // Check if the "content" value is not null before accessing it
+                    if (!event_data.is_null()) {
+                        // Extract message content and channel ID from the event_data
+    
+                        std::cout << event_data["username"].get<std::string>() << " send: " << event_data["content"].get<std::string>() << std::endl;
+
+                        //send data
+                    }
+                }
+            });
+        }
         std::cout << "Discord bot connected" << std::endl;
     }
 
+    void DiscordClient::handle_payload(const std::string& raw_payload) {
+        auto payload = nlohmann::json::parse(raw_payload);
+
+        if (payload["op"] == 11) {
+            std::cout << "Received Heartbeat Acknowledgement" << std::endl;
+        } else if (payload["op"] == 10) { // Opcode 10: Hello
+            int heartbeat_interval = payload["d"]["heartbeat_interval"];
+            start_heartbeat_thread(heartbeat_interval);
+        } else if (payload["t"] == "READY") {
+            std::cout << "Received READY event" << std::endl;
+        } else {
+            event_handler_.handle_event(raw_payload, [](const std::string& error_message) {
+                std::cerr << "Error handling event: " << error_message << std::endl;
+            });
+        }
+    }
+    
     void DiscordClient::start_heartbeat_thread(int interval_ms) {
-        std::cout<<"Trying to heartbeat"<<std::endl;
+        std::cout << "Trying to heartbeat" << std::endl;
         std::thread([this, interval_ms]() {
             while (!stop_threads_) {
                 std::this_thread::sleep_for(std::chrono::milliseconds(interval_ms));
@@ -87,13 +157,13 @@ namespace discord
     }
 
     void DiscordClient::start_identify_thread() {
-        std::cout<<"Trying to identify"<<std::endl;
+        std::cout << "Trying to identify" << std::endl;
         std::thread([this]() {
             nlohmann::json identify_payload{
                 {"op", 2},
                 {"d", {
                     {"token", bot_token_},
-                    {"intents", 1 << 9}, // Add the GUILD_MESSAGES intent
+                    {"intents", (1 << 9) | (1 << 15)}, // Add the GUILD_MESSAGES and MESSAGE_CONTENT intents
                     {"properties", {
                         {"$os", "linux"},
                         {"$browser", "disco"},
@@ -111,25 +181,13 @@ namespace discord
         }).detach();
     }
 
-
+    void DiscordClient::reconnect(const std::string& uri) {
+        std::cout << "Reconnecting..." << std::endl;
+        std::this_thread::sleep_for(std::chrono::seconds(5));
+        connect(uri);
+    }
     void DiscordClient::send(const std::string& message)
     {
         client_handler_ptr->send(message);
     }
-
-    //To be fixed with RestApi
-
-    // void DiscordClient::send_message(const std::string& channel_id, const std::string& content) {
-    //     nlohmann::json payload{
-    //         {"op", 8},
-    //         {"t", "MESSAGE_CREATE"},
-    //         {"d", {
-    //             {"content", content},
-    //             {"channel_id", channel_id}
-    //         }}
-    //     };
-
-    //     std::string payload_str = payload.dump();
-    //     client_handler_ptr->send(payload_str);
-    // }
 }
