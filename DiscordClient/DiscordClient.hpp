@@ -17,25 +17,23 @@
 namespace discord {
 
 class DiscordClient {
-
 public:
     DiscordClient(const std::string& bot_token, DiscordEvents::ResponseCallback response_callback);
     ~DiscordClient();
 
-    std::map<std::string, std::string> headers = {
-        {"Authorization", "Bot " + bot_token_}
-    };
-    
     void connect(const std::string& uri);
-
     void send(const std::string& message);
 
-
-
 private:
+    void setup_handlers(const std::string& uri);
+    void setup_event_handler();
+    void start_worker_threads();
+
+    void reconnect(const std::string& uri);
     void start_heartbeat_thread(int interval_ms);
     void start_identify_thread();
     void handle_payload(const std::string& raw_payload);
+
     std::unique_ptr<websocket_handler::WebsocketClientHandler> client_handler_ptr;
     const std::string bot_token_;
     unsigned int worker_threads_count_;
@@ -47,6 +45,10 @@ private:
     discord::DiscordEventHandler event_handler_;
     std::atomic<bool> stop_threads_;
     int last_sequence_ = -1;
+
+    std::map<std::string, std::string> headers = {
+        {"Authorization", "Bot " + bot_token_}
+    };
 };
 
 } // namespace discord
