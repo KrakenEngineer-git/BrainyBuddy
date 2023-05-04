@@ -25,6 +25,8 @@ public:
     void send(const std::string& message);
 
 private:
+
+    void send_message(const std::string& channel_id, const std::string& message);
     void setup_handlers(const std::string& uri);
     void setup_event_handler();
     void start_worker_threads();
