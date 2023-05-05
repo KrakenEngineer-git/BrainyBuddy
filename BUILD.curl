@@ -20,8 +20,11 @@ cc_library(
     ]),
     local_defines = [
         "BUILDING_LIBCURL",
-        "HTTP_ONLY",
         "ENABLE_IPV6",
+
+        "CURL_DISABLE_LDAP",
+        "USE_OPENSSL",
+        "USE_SSLEAY",
 
         "USE_THREADS_POSIX",
         "USE_UNIX_SOCKETS",

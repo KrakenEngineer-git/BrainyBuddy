@@ -16,14 +16,13 @@ int main() {
         if (content.find("[QUESTION]") != std::string::npos) {
             return std::string("Answer to: ") + content;
         }
-        return std::string();
+        return std::string(""); // Return an empty string or whatever you want to return when content doesn't contain "[QUESTION]"
     };
 
-    discord::DiscordClient discord_client(token, response_callback);
-    discord_client.connect("wss://gateway.discord.gg/?v=9&encoding=json");
-    
-    // Keep the main thread running until terminated (e.g., by Ctrl+C)
-    while (true) {
+    discord::DiscordClient client(token, response_callback);
+    client.connect("wss://gateway.discord.gg/?v=9&encoding=json");
+
+    while(true) {
         std::this_thread::sleep_for(std::chrono::seconds(1));
     }
 

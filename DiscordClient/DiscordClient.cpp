@@ -192,7 +192,7 @@ namespace discord
     void DiscordClient::send_message(const std::string& channel_id, const std::string& message)
     {
         CURL* curl = curl_easy_init();
-
+    
         if (curl) {
             curl_easy_setopt(curl, CURLOPT_CUSTOMREQUEST, "POST");
             curl_easy_setopt(curl, CURLOPT_SSL_VERIFYPEER, 0L);
