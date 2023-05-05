@@ -6,7 +6,7 @@ cc_library(
     ],
     deps = [
         "@nlohmann_json//:nlohmann_json", 
-        "@curl//:source",
+        "//CurlHandler:curl_handler_lib",
         "//DiscordEventHandler:discord_event_handler",
         "//WebSocketHandler/impl:websocket_handler_lib",
         "//utilities",

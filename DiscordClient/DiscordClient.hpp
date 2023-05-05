@@ -13,6 +13,7 @@
 #include "WebSocketHandler/impl/WebsocketClientHandler.hpp"
 #include "DiscordEventHandler/DiscordEventHandler.hpp"
 #include "utilities/utilities.hpp"
+#include "CurlHandler/CurlHandler.hpp"
 
 namespace discord {
 
@@ -22,7 +23,6 @@ public:
     ~DiscordClient();
 
     void connect(const std::string& uri);
-    void send(const std::string& message);
 
 private:
 
@@ -51,6 +51,8 @@ private:
     std::map<std::string, std::string> headers = {
         {"Authorization", "Bot " + bot_token_}
     };
+
+    std::unique_ptr<CurlHandler> curlHandler;
 };
 
 } // namespace discord

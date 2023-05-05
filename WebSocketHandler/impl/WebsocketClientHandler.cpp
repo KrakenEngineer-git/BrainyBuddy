@@ -13,6 +13,8 @@ namespace websocket_handler {
         std::lock_guard<std::mutex> lock(m_client_handler_mutex);
         try
         {
+            ws_client_.set_access_channels(websocketpp::log::alevel::connect | websocketpp::log::alevel::disconnect);
+            ws_client_.set_error_channels(websocketpp::log::elevel::info | websocketpp::log::elevel::warn | websocketpp::log::elevel::rerror | websocketpp::log::elevel::fatal);
             ws_client_.set_open_handler(std::bind(&WebsocketClientHandler::on_open, this, std::placeholders::_1));
             ws_client_.set_close_handler(std::bind(&WebsocketClientHandler::on_close, this, std::placeholders::_1));
             ws_client_.set_fail_handler(std::bind(&WebsocketClientHandler::on_fail, this, std::placeholders::_1));

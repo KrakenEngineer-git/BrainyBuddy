@@ -7,9 +7,15 @@ nlohmann::json DiscordEvents::on_message_create(const nlohmann::json& data, Resp
     std::string content = data["content"];
     std::string channelId = data["channel_id"];
     std::string username = data["author"]["username"];
+    bool isBot = false; 
+
+    if (data["author"].contains("bot")) {
+        isBot = data["author"]["bot"].get<bool>();  // Extract bot status from the message
+    }
+
     nlohmann::json dataToReturn;
         /*Check if the message that is recived is correct with the [QUESTION] at the beggining*/
-    if (content.find("[QUESTION]") != std::string::npos) {
+    if (content.find("[QUESTION]") != std::string::npos && !isBot) {
 
         /*Waits until function returns response*/
         std::string response = response_callback(content);
@@ -32,13 +38,13 @@ nlohmann::json DiscordEvents::on_message_create(const nlohmann::json& data, Resp
 
 nlohmann::json DiscordEvents::on_message_update(const nlohmann::json& data) {
     // Handle MESSAGE_UPDATE event
-    std::cout << "Message updated: " << std::endl;
+    std::cout << "Message updated " << std::endl;
     return data;
 }
 
 nlohmann::json DiscordEvents::on_message_delete(const nlohmann::json& data) {
     // Handle MESSAGE_DELETE event
-    std::cout << "Message deleted: " << std::endl;
+    std::cout << "Message deleted " << std::endl;
     return data;
 }
 

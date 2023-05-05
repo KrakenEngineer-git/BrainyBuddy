@@ -1,11 +1,13 @@
 #include "DiscordClient.hpp"
-#include <curl/curl.h>
 namespace discord 
 {
     DiscordClient::DiscordClient(const std::string& bot_token, DiscordEvents::ResponseCallback response_callback)
-        : bot_token_(bot_token), worker_threads_count_(4), response_callback_(response_callback), stop_threads_(false) {
+        : bot_token_(bot_token), worker_threads_count_(4), response_callback_(response_callback), stop_threads_(false),
+        curlHandler(make_unique<CurlHandler>()) {
         try {
             client_handler_ptr = make_unique<websocket_handler::WebsocketClientHandler>();
+            curlHandler->AddHeader("Authorization: Bot " + bot_token_);
+            curlHandler->AddHeader("Content-Type: application/json");
         } catch (const std::exception& e) {
             std::cerr << e.what() << '\n';
         }
@@ -110,9 +112,10 @@ namespace discord
                     // Check if the "content" value is not null before accessing it
                     if (!event_data.is_null()) {
                         // Extract message content and channel ID from the event_data
-                        std::cout << event_data["username"].get<std::string>() << " send: " << event_data["content"].get<std::string>() << std::endl;
                         std::string channel_id = event_data["channel_id"].get<std::string>();
-                        send_message(channel_id, "test");
+                        std::string conten = event_data["content"].get<std::string>();
+                        std::cout << event_data["username"].get<std::string>() << " send: " << conten << std::endl;
+                        send_message(channel_id, conten);
                     }
                 }
             });
@@ -184,39 +187,11 @@ namespace discord
         std::this_thread::sleep_for(std::chrono::seconds(5));
         connect(uri);
     }
-    void DiscordClient::send(const std::string& message)
-    {
-        client_handler_ptr->send(message);
-    }
     
     void DiscordClient::send_message(const std::string& channel_id, const std::string& message)
     {
-        CURL* curl = curl_easy_init();
-    
-        if (curl) {
-            curl_easy_setopt(curl, CURLOPT_CUSTOMREQUEST, "POST");
-            curl_easy_setopt(curl, CURLOPT_SSL_VERIFYPEER, 0L);
-
-            std::string url = "https://discord.com/api/v10/channels/" + channel_id + "/messages";
-            curl_easy_setopt(curl, CURLOPT_URL, url.c_str());
-
-            struct curl_slist* headers = nullptr;
-            headers = curl_slist_append(headers, ("Authorization: Bot " + bot_token_).c_str());
-            headers = curl_slist_append(headers, "Content-Type: application/json");
-            curl_easy_setopt(curl, CURLOPT_HTTPHEADER, headers);
-
-            nlohmann::json message_json;
-            message_json["content"] = message;
-            std::string payload = message_json.dump();
-            curl_easy_setopt(curl, CURLOPT_POSTFIELDS, payload.c_str());
-
-            CURLcode res = curl_easy_perform(curl);
-            if (res != CURLE_OK) {
-                std::cerr << "Error sending message: " << curl_easy_strerror(res) << std::endl;
-            }
-
-            curl_easy_cleanup(curl);
-            curl_slist_free_all(headers);
-        }
+        std::string url = "https://discord.com/api/v10/channels/" + channel_id + "/messages";  // Use your webhook URL here
+        std::string data = "{\"content\":\"" + message + "\"}";
+        curlHandler->post(url, data);
     }
 }
