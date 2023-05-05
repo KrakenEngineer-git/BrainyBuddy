@@ -4,6 +4,7 @@ cc_binary(
     deps = [
         "@websocketpp//:websocketpp",
         "@nlohmann_json//:nlohmann_json", 
+        "@curl//:curl",
         "//WebSocketHandler/impl:websocket_handler_lib",
         "//DiscordClient:discord_client",
     ],

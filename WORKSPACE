@@ -1,4 +1,5 @@
 load("@bazel_tools//tools/build_defs/repo:http.bzl", "http_archive")
+load("@bazel_tools//tools/build_defs/repo:utils.bzl", "maybe")
 
 http_archive(
     name = "websocketpp",
@@ -21,4 +22,14 @@ http_archive(
     sha256 = "07b4117379dde7ab382345c3b0f5edfc6b7cff6c93756eac63da121e0bbcc5de",
     strip_prefix = "bazel-skylib-1.1.1",
     urls = ["https://github.com/bazelbuild/bazel-skylib/archive/refs/tags/1.1.1.tar.gz"],
+)
+
+
+maybe(
+    http_archive,
+    name = "curl",
+    build_file = "@//:BUILD.curl",
+    url = "https://github.com/curl/curl/archive/curl-8_0_1.tar.gz",
+    sha256 = "d9aefeb87998472cd79418edd4fb4dc68c1859afdbcbc2e02400b220adc64ec1",
+    strip_prefix = "curl-curl-8_0_1",
 )

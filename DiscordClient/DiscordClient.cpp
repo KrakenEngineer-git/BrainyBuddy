@@ -1,12 +1,13 @@
 #include "DiscordClient.hpp"
-// #include <curl/curl.h>
-// #include <sstream>
 namespace discord 
 {
     DiscordClient::DiscordClient(const std::string& bot_token, DiscordEvents::ResponseCallback response_callback)
-        : bot_token_(bot_token), worker_threads_count_(4), response_callback_(response_callback), stop_threads_(false) {
+        : bot_token_(bot_token), worker_threads_count_(10), response_callback_(response_callback), stop_threads_(false),
+        curlHandler(make_unique<CurlHandler>()) {
         try {
             client_handler_ptr = make_unique<websocket_handler::WebsocketClientHandler>();
+            curlHandler->AddHeader("Authorization: Bot " + bot_token_);
+            curlHandler->AddHeader("Content-Type: application/json");
         } catch (const std::exception& e) {
             std::cerr << e.what() << '\n';
         }
@@ -111,10 +112,9 @@ namespace discord
                     // Check if the "content" value is not null before accessing it
                     if (!event_data.is_null()) {
                         // Extract message content and channel ID from the event_data
-    
-                        std::cout << event_data["username"].get<std::string>() << " send: " << event_data["content"].get<std::string>() << std::endl;
-
-                        //send data
+                        std::string channel_id = event_data["channel_id"].get<std::string>();
+                        std::string conten = event_data["content"].get<std::string>();
+                        send_message(channel_id, conten);
                     }
                 }
             });
@@ -186,8 +186,11 @@ namespace discord
         std::this_thread::sleep_for(std::chrono::seconds(5));
         connect(uri);
     }
-    void DiscordClient::send(const std::string& message)
+    
+    void DiscordClient::send_message(const std::string& channel_id, const std::string& message)
     {
-        client_handler_ptr->send(message);
+        std::string url = "https://discord.com/api/v10/channels/" + channel_id + "/messages";
+        std::string data = "{\"content\":\"" + message + "\"}";
+        curlHandler->post(url, data);
     }
 }
