@@ -16,7 +16,8 @@ nlohmann::json DiscordEvents::on_message_create(const nlohmann::json& data, Resp
     nlohmann::json dataToReturn;
         /*Check if the message that is recived is correct with the [QUESTION] at the beggining*/
     if (content.find("[QUESTION]") != std::string::npos && !isBot) {
-
+        
+        std::cout << username << " send: " << content << std::endl;
         /*Waits until function returns response*/
         std::string response = response_callback(content);
         /*Check if the response is not empty*/

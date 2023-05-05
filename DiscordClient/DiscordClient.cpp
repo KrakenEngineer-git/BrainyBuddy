@@ -2,7 +2,7 @@
 namespace discord 
 {
     DiscordClient::DiscordClient(const std::string& bot_token, DiscordEvents::ResponseCallback response_callback)
-        : bot_token_(bot_token), worker_threads_count_(4), response_callback_(response_callback), stop_threads_(false),
+        : bot_token_(bot_token), worker_threads_count_(10), response_callback_(response_callback), stop_threads_(false),
         curlHandler(make_unique<CurlHandler>()) {
         try {
             client_handler_ptr = make_unique<websocket_handler::WebsocketClientHandler>();
@@ -114,7 +114,6 @@ namespace discord
                         // Extract message content and channel ID from the event_data
                         std::string channel_id = event_data["channel_id"].get<std::string>();
                         std::string conten = event_data["content"].get<std::string>();
-                        std::cout << event_data["username"].get<std::string>() << " send: " << conten << std::endl;
                         send_message(channel_id, conten);
                     }
                 }
@@ -190,7 +189,7 @@ namespace discord
     
     void DiscordClient::send_message(const std::string& channel_id, const std::string& message)
     {
-        std::string url = "https://discord.com/api/v10/channels/" + channel_id + "/messages";  // Use your webhook URL here
+        std::string url = "https://discord.com/api/v10/channels/" + channel_id + "/messages";
         std::string data = "{\"content\":\"" + message + "\"}";
         curlHandler->post(url, data);
     }

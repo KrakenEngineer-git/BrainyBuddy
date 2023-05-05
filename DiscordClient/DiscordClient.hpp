@@ -25,7 +25,7 @@ public:
     void connect(const std::string& uri);
 
 private:
-
+    std::string fetch_message(const std::string& channel_id, const std::string& message_id);
     void send_message(const std::string& channel_id, const std::string& message);
     void setup_handlers(const std::string& uri);
     void setup_event_handler();

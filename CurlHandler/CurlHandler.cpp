@@ -1,10 +1,11 @@
 #include "CurlHandler.hpp"
 #include <stdexcept>
+#include <thread>
 
 CurlHandler::CurlHandler() : headers(nullptr) {
     curl = curl_easy_init();
     if(!curl) {
-        throw std::runtime_error("Curl initialization failed");
+        throw std::runtime_error("Curl initialization failed in CurlHandler constructor");
     }
 }
 
@@ -43,17 +44,35 @@ std::string CurlHandler::Get(const std::string& url) {
 }
 
 void CurlHandler::post(const std::string& url, const std::string& payload) {
-    curl_easy_setopt(curl, CURLOPT_CUSTOMREQUEST, "POST");
-    curl_easy_setopt(curl, CURLOPT_SSL_VERIFYPEER, 0L);
-    curl_easy_setopt(curl, CURLOPT_URL, url.c_str());
+    while (true) { 
+        std::lock_guard<std::mutex> lock(curl_mutex);
+        curl_easy_setopt(curl, CURLOPT_CUSTOMREQUEST, "POST");
+        curl_easy_setopt(curl, CURLOPT_SSL_VERIFYPEER, 0L);
+        curl_easy_setopt(curl, CURLOPT_URL, url.c_str());
 
-    curl_easy_setopt(curl, CURLOPT_HTTPHEADER, headers);
-    curl_easy_setopt(curl, CURLOPT_POSTFIELDS, payload.c_str());
+        curl_easy_setopt(curl, CURLOPT_HTTPHEADER, headers);
+        curl_easy_setopt(curl, CURLOPT_POSTFIELDS, payload.c_str());
 
-    CURLcode res = curl_easy_perform(curl);
-    if(res != CURLE_OK) {
-        throw std::runtime_error(curl_easy_strerror(res));
+        std::string readBuffer;
+        curl_easy_setopt(curl, CURLOPT_WRITEFUNCTION, WriteCallback);
+        curl_easy_setopt(curl, CURLOPT_WRITEDATA, &readBuffer);
+
+        CURLcode res = curl_easy_perform(curl);
+        long http_code = 0;
+        curl_easy_getinfo(curl, CURLINFO_RESPONSE_CODE, &http_code);
+        curl_easy_reset(curl);
+
+        if (http_code == 429) { // rate limit hit
+            nlohmann::json jsonResponse = nlohmann::json::parse(readBuffer);
+            int retryAfter = jsonResponse["retry_after"];
+            std::this_thread::sleep_for(std::chrono::milliseconds(retryAfter));
+            // Retry the request
+        } else if (res != CURLE_OK) {
+            std::string error_message = "Curl post request failed with error: ";
+            error_message += curl_easy_strerror(res);
+            throw std::runtime_error(error_message);
+        } else {
+            break; // Success, exit the loop
+        }
     }
-
-    curl_easy_reset(curl);
 }

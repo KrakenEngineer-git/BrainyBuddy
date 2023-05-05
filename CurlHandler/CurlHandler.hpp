@@ -5,6 +5,9 @@
 #include <curl/curl.h>
 #include <vector>
 
+#include <nlohmann/json.hpp>
+#include <mutex>
+
 class CurlHandler {
 public:
     CurlHandler();
@@ -19,6 +22,7 @@ private:
     static size_t WriteCallback(void* contents, size_t size, size_t nmemb, std::string* userp);
     CURL* curl;
     struct curl_slist* headers;
+    std::mutex curl_mutex;
 };
 
 
