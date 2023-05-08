@@ -13,6 +13,21 @@ namespace discord
         }
     }
 
+    void DiscordClient::run() 
+    {
+        connect("wss://gateway.discord.gg/?v=10&encoding=json");
+        running_ = true;
+
+        while (running_) {
+            std::this_thread::sleep_for(std::chrono::seconds(1));
+        }
+    }
+
+    void DiscordClient::stop() 
+    {
+        running_ = false;   
+    }
+
     DiscordClient::~DiscordClient() {
         stop_threads_ = true;
         cv_.notify_all();

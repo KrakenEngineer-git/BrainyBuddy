@@ -1,5 +1,4 @@
 #include "BrainyBuddy.hpp"
-#include "DiscordClient/DiscordClient.hpp"
 #include <cstdlib>
 #include <iostream>
 #include <memory>
@@ -23,25 +22,36 @@ BrainyBuddy::BrainyBuddy()
     bot_token_ = std::string(token_env_var);
     openai_api_key_ = std::string(openai_api_key_env_var);
 
-    openai_client_ = make_unique<OpenAIClient>(openai_api_key_);
+    try {
+        openai_client_ = make_unique<OpenAIClient>(openai_api_key_);
+    } catch (const std::exception& e) {
+        std::cerr << e.what() << '\n';
+    }
+}
+
+BrainyBuddy::~BrainyBuddy()
+{
+    discord_client_->stop();
+    std::cout << "BrainyBuddy destructor called" << std::endl;
 }
 
 void BrainyBuddy::run()
 {
-    discord::DiscordEvents::ResponseCallback response_callback = [this](const std::string &input) {
-        return get_openai_response(input);
+    discord::DiscordEvents::ResponseCallback response_callback = [this](const std::string &input, const std::string &author_username) {
+        return get_openai_response(input,author_username);
     };
 
-    discord::DiscordClient client(bot_token_, response_callback);
-    client.connect("wss://gateway.discord.gg/?v=10&encoding=json");
-
-    while(true) {
-        std::this_thread::sleep_for(std::chrono::seconds(1));
+    try {
+        discord_client_ = make_unique<discord::DiscordClient>(bot_token_,response_callback);
+    } catch (const std::exception& e) {
+        std::cerr << e.what() << '\n';
     }
+    
+    discord_client_->run();
 }
 
-std::string BrainyBuddy::get_openai_response(const std::string &input)
+std::string BrainyBuddy::get_openai_response(const std::string &input,const std::string &author_username)
 {
-    return openai_client_->generate_response(input);
+    return openai_client_->generate_response(input,author_username);
 }
 

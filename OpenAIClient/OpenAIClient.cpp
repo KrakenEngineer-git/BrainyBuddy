@@ -7,7 +7,7 @@ OpenAIClient::OpenAIClient(const std::string &api_key) : api_key_(api_key)
     curl_handler_->AddHeader("Content-Type: application/json");
 }
 
-std::string OpenAIClient::generate_response(const std::string &input)
+std::string OpenAIClient::generate_response(const std::string &input, const std::string &author_username)
 {
     std::string url = "https://api.openai.com/v1/chat/completions";
 
@@ -16,6 +16,10 @@ std::string OpenAIClient::generate_response(const std::string &input)
         {
             "messages",
             {
+                {
+                    {"role", "system"},
+                    {"content", "You are an AI assistant, and you are now talking to " + author_username + "."}
+                },
                 {
                     {"role", "user"},
                     {"content", input}

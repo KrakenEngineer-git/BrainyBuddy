@@ -24,7 +24,7 @@ nlohmann::json DiscordEvents::on_message_create(const nlohmann::json& data, Resp
         std::cout << username << " sent: " << content << std::endl;
 
         /*Waits until function returns response*/
-        std::string response = response_callback(content);
+        std::string response = response_callback(content,username);
 
         /*Check if the response is not empty*/
         if (!response.empty()) {
