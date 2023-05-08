@@ -22,9 +22,11 @@ public:
     DiscordClient(const std::string& bot_token, DiscordEvents::ResponseCallback response_callback);
     ~DiscordClient();
 
-    void connect(const std::string& uri);
+    void run();
+    void stop();
 
 private:
+    void connect(const std::string& uri);
     std::string fetch_message(const std::string& channel_id, const std::string& message_id);
     void send_message(const std::string& channel_id, const std::string& message, const std::string& message_id);
     void setup_handlers(const std::string& uri);
@@ -47,6 +49,7 @@ private:
     discord::DiscordEventHandler event_handler_;
     std::atomic<bool> stop_threads_;
     int last_sequence_ = -1;
+    bool running_;
 
     std::map<std::string, std::string> headers = {
         {"Authorization", "Bot " + bot_token_}

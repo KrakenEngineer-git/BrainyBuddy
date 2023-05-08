@@ -10,7 +10,7 @@ class OpenAIClient
 {
 public:
     OpenAIClient(const std::string &api_key);
-    std::string generate_response(const std::string &input);
+    std::string generate_response(const std::string &input,const std::string &author_username);
 
 private:
     std::unique_ptr<CurlHandler> curl_handler_;
