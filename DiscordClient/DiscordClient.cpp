@@ -200,7 +200,7 @@ namespace discord
 
         // Serialize the payload to a string
         std::string data = payload.dump();
-        curlHandler->post(url, data);
+        curlHandler->post(url, data, false);
     }
 
 }

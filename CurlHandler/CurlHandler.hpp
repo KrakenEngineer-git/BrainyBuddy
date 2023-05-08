@@ -16,7 +16,7 @@ public:
     void AddHeader(const std::string& header);
 
     std::string Get(const std::string& url);
-    void post(const std::string& url, const std::string& payload);
+    std::string post(const std::string& url, const std::string& payload, bool get_response);
 
 private:
     static size_t WriteCallback(void* contents, size_t size, size_t nmemb, std::string* userp);
