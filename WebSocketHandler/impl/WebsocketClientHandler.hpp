@@ -24,6 +24,7 @@ namespace websocket_handler {
 
     private:
         std::mutex m_client_handler_mutex;
+        std::vector<std::thread> worker_threads_;
     };
 
 } // namespace websocket_handler

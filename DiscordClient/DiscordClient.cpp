@@ -111,10 +111,9 @@ namespace discord
                     lock.unlock();
                     // Check if the "content" value is not null before accessing it
                     if (!event_data.is_null()) {
-                        // Extract message content and channel ID from the event_data
-                        std::string channel_id = event_data["channel_id"].get<std::string>();
-                        std::string conten = event_data["content"].get<std::string>();
-                        send_message(channel_id, conten);
+                        if (event_data["action"] == "send_message") {
+                            send_message(event_data["channel_id"], event_data["content"], event_data["message_id"]); // <-- add message_id here
+                        }
                     }
                 }
             });
@@ -141,7 +140,7 @@ namespace discord
     
     void DiscordClient::start_heartbeat_thread(int interval_ms) {
         std::cout << "Trying to heartbeat" << std::endl;
-        std::thread([this, interval_ms]() {
+        worker_threads_.emplace_back([this, interval_ms]() {
             while (!stop_threads_) {
                 std::this_thread::sleep_for(std::chrono::milliseconds(interval_ms));
                 nlohmann::json heartbeat_payload;
@@ -153,12 +152,12 @@ namespace discord
                     client_handler_ptr->send(heartbeat_str);
                 }
             }
-        }).detach();
+        });
     }
 
     void DiscordClient::start_identify_thread() {
         std::cout << "Trying to identify" << std::endl;
-        std::thread([this]() {
+        worker_threads_.emplace_back([this]() {
             nlohmann::json identify_payload{
                 {"op", 2},
                 {"d", {
@@ -178,7 +177,7 @@ namespace discord
                 std::string identify_str = identify_payload.dump();
                 client_handler_ptr->send(identify_str);
             }
-        }).detach();
+        });
     }
 
     void DiscordClient::reconnect(const std::string& uri) {
@@ -187,10 +186,21 @@ namespace discord
         connect(uri);
     }
     
-    void DiscordClient::send_message(const std::string& channel_id, const std::string& message)
+    void DiscordClient::send_message(const std::string& channel_id, const std::string& message, const std::string& message_id)
     {
         std::string url = "https://discord.com/api/v10/channels/" + channel_id + "/messages";
-        std::string data = "{\"content\":\"" + message + "\"}";
+
+        // Include the message_reference field in the JSON payload
+        nlohmann::json payload = {
+            {"content", message},
+            {"message_reference", {
+                {"message_id", message_id}
+            }}
+        };
+
+        // Serialize the payload to a string
+        std::string data = payload.dump();
         curlHandler->post(url, data);
     }
+
 }
