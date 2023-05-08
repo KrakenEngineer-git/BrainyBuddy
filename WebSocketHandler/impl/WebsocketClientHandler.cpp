@@ -6,7 +6,12 @@ namespace websocket_handler {
            set_client_handlers();
     }
 
-    WebsocketClientHandler::~WebsocketClientHandler() = default;
+    WebsocketClientHandler::~WebsocketClientHandler()
+    {
+        for (auto& thread : worker_threads_) {
+            thread.join();
+        }       
+    }
 
     void WebsocketClientHandler::set_client_handlers() 
     {
@@ -51,9 +56,9 @@ namespace websocket_handler {
             std::cout<<"Connected!"<<std::endl;
 
             std::cout<<"Trying to run..."<<std::endl;
-            std::thread([this]() {
+            worker_threads_.emplace_back([this]() {
                 ws_client_.run();
-            }).detach();
+            });
             std::cout<<"Runned!"<<std::endl;
         } 
         catch (websocketpp::exception const& e) {

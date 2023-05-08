@@ -6,6 +6,7 @@ namespace discord {
 nlohmann::json DiscordEvents::on_message_create(const nlohmann::json& data, ResponseCallback response_callback) {
     std::string content = data["content"];
     std::string channelId = data["channel_id"];
+    std::string messageId = data["id"];
     std::string username = data["author"]["username"];
     bool isBot = false; 
 
@@ -14,27 +15,33 @@ nlohmann::json DiscordEvents::on_message_create(const nlohmann::json& data, Resp
     }
 
     nlohmann::json dataToReturn;
-        /*Check if the message that is recived is correct with the [QUESTION] at the beggining*/
-    if (content.find("[QUESTION]") != std::string::npos && !isBot) {
-        
-        std::cout << username << " send: " << content << std::endl;
+
+    /*Check if the message that is received is prefixed with "!question" at the beginning and the sender is not a bot*/
+    if (content.rfind("!question ", 0) == 0 && !isBot) {
+
+        content = content.substr(10); // Remove "!question" from the message
+
+        std::cout << username << " sent: " << content << std::endl;
+
         /*Waits until function returns response*/
         std::string response = response_callback(content);
+
         /*Check if the response is not empty*/
         if (!response.empty()) {
-            
-            nlohmann::json dataToReturn{
-                    {"action","send_message"},
-                    {"username", username},
-                    {"content", response},
-                    {"channel_id", channelId},
-                };
-                return dataToReturn;
-            }
-        }   
+            dataToReturn = {
+                {"action","send_message"},
+                {"username", username},
+                {"content", response},
+                {"channel_id", channelId},
+                {"message_id", messageId},
+            };
+            return dataToReturn;
+        }
+    }   
 
     return nlohmann::json();
 }
+
 
 
 nlohmann::json DiscordEvents::on_message_update(const nlohmann::json& data) {

@@ -13,10 +13,7 @@ int main() {
     std::string token(token_env_var);
 
     discord::DiscordEvents::ResponseCallback response_callback = [](const std::string& content) {
-        if (content.find("[QUESTION]") != std::string::npos) {
-            return std::string("Answer to: ") + content;
-        }
-        return std::string(""); // Return an empty string or whatever you want to return when content doesn't contain "[QUESTION]"
+        return std::string("Answer to: ") + content;
     };
 
     discord::DiscordClient client(token, response_callback);
