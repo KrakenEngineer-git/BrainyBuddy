@@ -43,8 +43,9 @@ std::string CurlHandler::Get(const std::string& url) {
     return readBuffer;
 }
 
-void CurlHandler::post(const std::string& url, const std::string& payload) {
-    while (true) { 
+std::string CurlHandler::post(const std::string& url, const std::string& payload, bool get_response) {
+    std::string readBuffer;
+    while (true) {
         std::lock_guard<std::mutex> lock(curl_mutex);
         curl_easy_setopt(curl, CURLOPT_CUSTOMREQUEST, "POST");
         curl_easy_setopt(curl, CURLOPT_SSL_VERIFYPEER, 0L);
@@ -53,9 +54,10 @@ void CurlHandler::post(const std::string& url, const std::string& payload) {
         curl_easy_setopt(curl, CURLOPT_HTTPHEADER, headers);
         curl_easy_setopt(curl, CURLOPT_POSTFIELDS, payload.c_str());
 
-        std::string readBuffer;
-        curl_easy_setopt(curl, CURLOPT_WRITEFUNCTION, WriteCallback);
-        curl_easy_setopt(curl, CURLOPT_WRITEDATA, &readBuffer);
+        if (get_response) {
+            curl_easy_setopt(curl, CURLOPT_WRITEFUNCTION, WriteCallback);
+            curl_easy_setopt(curl, CURLOPT_WRITEDATA, &readBuffer);
+        }
 
         CURLcode res = curl_easy_perform(curl);
         long http_code = 0;
@@ -75,4 +77,6 @@ void CurlHandler::post(const std::string& url, const std::string& payload) {
             break; // Success, exit the loop
         }
     }
+    return readBuffer;
 }
+

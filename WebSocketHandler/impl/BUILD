@@ -10,7 +10,6 @@ cc_library(
     deps = [
         "@nlohmann_json//:nlohmann_json", 
         "@websocketpp//:websocketpp",
-        "//WebSocketHandler:websocket_client_base",
         "//utilities",
     ],
     linkopts = ["-lssl", "-lcrypto"],
