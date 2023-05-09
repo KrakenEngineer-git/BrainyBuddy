@@ -19,7 +19,7 @@ namespace discord {
 
 class DiscordClient {
 public:
-    DiscordClient(const std::string& bot_token, DiscordEvents::ResponseCallback response_callback);
+    DiscordClient(const std::string& bot_token, DiscordEvents::CheckIfIsAQuestion check_if_question,DiscordEvents::ResponseCallback response_callback);
     ~DiscordClient();
 
     void run();
@@ -45,6 +45,7 @@ private:
     std::queue<nlohmann::json> event_queue_;
     std::mutex mutex_;
     std::condition_variable cv_;
+    DiscordEvents::CheckIfIsAQuestion check_if_question_;
     DiscordEvents::ResponseCallback response_callback_;
     discord::DiscordEventHandler event_handler_;
     std::atomic<bool> stop_threads_;
