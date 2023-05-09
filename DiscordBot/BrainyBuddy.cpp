@@ -41,13 +41,22 @@ void BrainyBuddy::run()
         return get_openai_response(input,author_username);
     };
 
+    discord::DiscordEvents::CheckIfIsAQuestion check_if_question = [this](const std::string &input) {
+        return this->check_if_question(input);
+    };
+
     try {
-        discord_client_ = make_unique<discord::DiscordClient>(bot_token_,response_callback);
+        discord_client_ = make_unique<discord::DiscordClient>(bot_token_,check_if_question,response_callback);
     } catch (const std::exception& e) {
         std::cerr << e.what() << '\n';
     }
     
     discord_client_->run();
+}
+
+bool BrainyBuddy::check_if_question(const std::string &input)
+{
+    return openai_client_->is_question(input);
 }
 
 std::string BrainyBuddy::get_openai_response(const std::string &input,const std::string &author_username)

@@ -20,6 +20,7 @@ private:
     std::unique_ptr<discord::DiscordClient> discord_client_;
     std::unique_ptr<OpenAIClient> openai_client_;
 
+    bool check_if_question(const std::string &input);
     std::string get_openai_response(const std::string &input,const std::string &author_username);
 };
 

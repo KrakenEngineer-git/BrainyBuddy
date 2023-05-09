@@ -1,31 +1,33 @@
 #include "DiscordEvents.hpp"
 
 #include <iostream>
+#include <regex>
+#include <vector>
 namespace discord {
 
-nlohmann::json DiscordEvents::on_message_create(const nlohmann::json& data, ResponseCallback response_callback) {
-    std::string content = data["content"];
-    std::string channelId = data["channel_id"];
-    std::string messageId = data["id"];
-    std::string username = data["author"]["username"];
-    bool isBot = false; 
+nlohmann::json DiscordEvents::on_message_create(const nlohmann::json& data,CheckIfIsAQuestion check_if_question, ResponseCallback response_callback) {
+    std::string content = data.value("content", "NOT FOUND");
+    std::string channelId = data.value("channel_id", "NOT FOUND");
+    std::string messageId = data.value("id", "NOT FOUND");
 
-    if (data["author"].contains("bot")) {
-        isBot = data["author"]["bot"].get<bool>();  // Extract bot status from the message
+    std::string username = "NOT_FOUND";
+    bool isBot = false;
+
+    if (data.contains("author")) {
+        username = data["author"].value("username", "NOT_FOUND");
+        isBot = data["author"].value("bot", false);
     }
 
     nlohmann::json dataToReturn;
+    
+    if (!isBot) 
+    {
+        std::cout << "User: " << username << "Send: " <<  content << std::endl;
 
-    /*Check if the message that is received is prefixed with "!question" at the beginning and the sender is not a bot*/
-    if (content.rfind("!question ", 0) == 0 && !isBot) {
+        std::string response = "";
 
-        content = content.substr(10); // Remove "!question" from the message
-
-        std::cout << username << " sent: " << content << std::endl;
-
-        /*Waits until function returns response*/
-        std::string response = response_callback(content,username);
-
+        check_if_question(content) ?  response = response_callback(content,username) : response;
+        
         /*Check if the response is not empty*/
         if (!response.empty()) {
             dataToReturn = {
@@ -37,12 +39,14 @@ nlohmann::json DiscordEvents::on_message_create(const nlohmann::json& data, Resp
             };
             return dataToReturn;
         }
+        else
+        {
+            return nlohmann::json();
+        }
     }   
 
     return nlohmann::json();
 }
-
-
 
 nlohmann::json DiscordEvents::on_message_update(const nlohmann::json& data) {
     // Handle MESSAGE_UPDATE event

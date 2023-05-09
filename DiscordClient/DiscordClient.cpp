@@ -1,8 +1,8 @@
 #include "DiscordClient.hpp"
 namespace discord 
 {
-    DiscordClient::DiscordClient(const std::string& bot_token, DiscordEvents::ResponseCallback response_callback)
-        : bot_token_(bot_token), worker_threads_count_(10), response_callback_(response_callback), stop_threads_(false),
+    DiscordClient::DiscordClient(const std::string& bot_token, DiscordEvents::CheckIfIsAQuestion check_if_question, DiscordEvents::ResponseCallback response_callback)
+        : bot_token_(bot_token), worker_threads_count_(10),check_if_question_(check_if_question) ,response_callback_(response_callback), stop_threads_(false),
         curlHandler(make_unique<CurlHandler>()) {
         try {
             client_handler_ptr = make_unique<websocket_handler::WebsocketClientHandler>();
@@ -74,7 +74,7 @@ namespace discord
     {
         event_handler_.register_event_handler("MESSAGE_CREATE", [this](const nlohmann::json& data) {
 
-            nlohmann::json response = event_handler_.on_message_create(data, response_callback_);
+            nlohmann::json response = event_handler_.on_message_create(data,check_if_question_, response_callback_);
 
             if (!response.empty()) {
                 std::unique_lock<std::mutex> lock(mutex_);
@@ -93,7 +93,7 @@ namespace discord
                 return;
             }
 
-            nlohmann::json response = event_handler_.on_message_create(updatedResponse, response_callback_);
+            nlohmann::json response = event_handler_.on_message_create(updatedResponse, check_if_question_, response_callback_);
 
             if (!response.empty()) {
                 std::unique_lock<std::mutex> lock(mutex_);
@@ -126,8 +126,8 @@ namespace discord
                     lock.unlock();
                     // Check if the "content" value is not null before accessing it
                     if (!event_data.is_null()) {
-                        if (event_data["action"] == "send_message") {
-                            send_message(event_data["channel_id"], event_data["content"], event_data["message_id"]); // <-- add message_id here
+                        if (event_data.value("action", "NOT FOUND") == "send_message") {
+                            send_message(event_data.value("channel_id", "NOT FOUND"), event_data.value("content", "NOT FOUND"), event_data.value("message_id", "NOT FOUND"));
                         }
                     }
                 }
