@@ -1,13 +1,13 @@
 # BrainyBuddy
 
-This BrainyBuddy bot is designed to answer questions using OpenAI's GPT-3 Turbo. It listens for messages in Discord that start with !question, processes the question, and sends it to the OpenAI API to get an answer using GPT-3 Turbo. The bot then returns the answer to the user as a replay in the Discord channel the message was send.
+This BrainyBuddy bot is designed to answer questions using OpenAI's GPT-3.5 Turbo. It listens for messages in Discord, determines if the message is a question, processes the question, and sends it to the OpenAI API to get an answer using GPT-3.5 Turbo. The bot then returns the answer to the user as a reply in the Discord channel the message was sent.
 
-![BrainyBuddy bot example](https://i.postimg.cc/XJFxHjPz/Zrzut-ekranu-2023-05-08-080310.png)
-
+![BrainyBuddy bot example](https://i.postimg.cc/nr4b6NLF/Zrzut-ekranu-2023-05-09-080749.png)
 
 ## Features
 
-- Monitors Discord channels for messages starting with !question
+- Monitors Discord channels for messages that are questions
++ Determines if a message is a question based on punctuation, keywords, and text embeddings
 * Processes and sends the question to OpenAI's GPT-3 Turbo API
 + Returns the answer to the user as a replay in the Discord channel
 - Utilizes Bazel for building and managing dependencies
