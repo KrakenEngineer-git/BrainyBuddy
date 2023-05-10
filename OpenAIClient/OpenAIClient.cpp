@@ -2,9 +2,12 @@
 #include <iostream>
 #include <sstream>
 #include <algorithm>
+#include <cmath>
+#include <future>
 
 OpenAIClient::OpenAIClient(const std::string &api_key) : api_key_(api_key)
 {
+    thread_pool_ = make_unique<ThreadPool>(4);
     curl_handler_ = make_unique<CurlHandler>();
     curl_handler_->AddHeader("Authorization: Bearer " + api_key_);
     curl_handler_->AddHeader("Content-Type: application/json");
@@ -17,6 +20,7 @@ OpenAIClient::OpenAIClient(const std::string &api_key) : api_key_(api_key)
 
 std::string OpenAIClient::generate_response(const std::string &input, const std::string &author_username)
 {
+    std::cout << "Generating response for input: " << input << std::endl;
     std::string url = "https://api.openai.com/v1/chat/completions";
     
     const int max_tokens = 200;
@@ -44,14 +48,21 @@ std::string OpenAIClient::generate_response(const std::string &input, const std:
 
     std::string data = payload.dump();
 
-    int retry_count = 0;
-    int max_retries = 5;
     std::string generated_text = "";
+    const int max_retries = 5;
 
-    while (retry_count < max_retries)
+    for (int retry = 0; retry < max_retries; ++retry)
     {
-        std::string response = curl_handler_->post(url, data, true);
+        std::string response;
+        std::promise<std::string> response_promise;
+        std::future<std::string> response_future = response_promise.get_future();
+        thread_pool_->enqueue_task([this, &url, &data, &response, &response_promise]() {
+            std::string response = curl_handler_->post(url, data, true);
+            response_promise.set_value(response);
+        });
 
+        response = response_future.get();
+        std::cout << "Response: " << response << std::endl;
         nlohmann::json response_json = nlohmann::json::parse(response);
         generated_text += response_json["choices"][0]["message"]["content"];
 
@@ -62,9 +73,8 @@ std::string OpenAIClient::generate_response(const std::string &input, const std:
 
         payload["messages"].push_back({{"role", "user"}, {"content", generated_text}});
         data = payload.dump();
-
-        retry_count++;
     }
+
 
     return generated_text;
 }
@@ -144,7 +154,15 @@ std::vector<float> OpenAIClient::get_text_embedding(const std::string &text)
     };
 
     std::string data = payload.dump();
-    std::string response = curl_handler_->post(url, data, true);
+    std::string response;
+    std::promise<std::string> response_promise;
+    std::future<std::string> response_future = response_promise.get_future();
+    thread_pool_->enqueue_task([this, &url, &data, &response, &response_promise]() {
+        response = curl_handler_->post(url, data, true);
+        response_promise.set_value(response);
+    });
+
+    response = response_future.get();
 
     nlohmann::json response_json = nlohmann::json::parse(response);
 

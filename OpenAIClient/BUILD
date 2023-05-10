@@ -8,6 +8,7 @@ cc_library(
         "@nlohmann_json//:nlohmann_json", 
         "//CurlHandler:curl_handler_lib",
         "//utilities",
+        "//ThreadPool:thread_pool",
     ],
     copts = [
         "-std=c++11",

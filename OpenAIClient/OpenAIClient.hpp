@@ -5,6 +5,7 @@
 #include <string>
 #include "CurlHandler/CurlHandler.hpp"
 #include "utilities/utilities.hpp"
+#include "ThreadPool/ThreadPool.hpp"
 
 class OpenAIClient
 {
@@ -50,6 +51,8 @@ private:
         "How can I effectively play from behind when my team is losing?",
         "What's the best way to practice and improve my mechanics?"
     };
+
+    std::unique_ptr<ThreadPool> thread_pool_;
 
 };
 

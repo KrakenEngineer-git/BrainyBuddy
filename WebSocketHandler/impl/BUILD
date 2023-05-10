@@ -11,6 +11,7 @@ cc_library(
         "@nlohmann_json//:nlohmann_json", 
         "@websocketpp//:websocketpp",
         "//utilities",
+        "//ThreadPool:thread_pool",
     ],
     linkopts = ["-lssl", "-lcrypto"],
     copts = [

@@ -1,0 +1,29 @@
+# fly.toml app configuration file generated for brainy-buddy on 2023-05-10T09:24:09+02:00
+#
+# See https://fly.io/docs/reference/configuration/ for information about how to use this file.
+#
+
+app = "brainy-buddy"
+primary_region = "waw"
+
+[build]
+  image = "krakenengineer/brainybuddy:latest"
+
+[env]
+  DISCORD_BOT_TOKEN = "${{ env.DISCORD_BOT_TOKEN }}"
+  OPENAI_API_KEY = "${{ env.OPENAI_API_KEY }}"
+
+[[services]]
+  protocol = "tcp"
+  internal_port = 8080
+
+  [[services.ports]]
+    port = 80
+    handlers = ["http"]
+
+  [[services.ports]]
+    port = 443
+    handlers = ["tls", "http"]
+  [services.concurrency]
+    hard_limit = 25
+    soft_limit = 20
