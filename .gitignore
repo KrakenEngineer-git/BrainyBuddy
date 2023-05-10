@@ -3,3 +3,4 @@ bazel-BrainyBuddy
 bazel-bin
 bazel-out
 bazel-testlogs
+.env
