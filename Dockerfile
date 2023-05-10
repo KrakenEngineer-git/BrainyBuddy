@@ -1,9 +1,19 @@
 # Use an official Ubuntu base image
-FROM ubuntu:latest
+FROM ubuntu:20.04
+
+# Prevent interactive prompts during package installation
+ARG DEBIAN_FRONTEND=noninteractive
 
 # Update the package list and install required dependencies
 RUN apt-get update && \
-    apt-get install -y build-essential libboost-all-dev libasio-dev libcurl4-openssl-dev curl gnupg && \
+    apt-get install -y --no-install-recommends \
+        build-essential \
+        libboost-all-dev \
+        libasio-dev \
+        libcurl4-openssl-dev \
+        curl \
+        gnupg \
+        ca-certificates && \
     apt-get clean && \
     rm -rf /var/lib/apt/lists/*
 
@@ -23,9 +33,6 @@ COPY . /app
 
 # Set up your API tokens as environment variables
 CMD DISCORD_BOT_TOKEN=$DISCORD_BOT_TOKEN OPENAI_API_KEY=$OPENAI_API_KEY ./bazel-bin/my_bot
-
-# Expose the required port for the bot (if needed)
-# EXPOSE <port>
 
 # Start the bot
 CMD ["bazel", "--batch", "run", "//:my_bot"]

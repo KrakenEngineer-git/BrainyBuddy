@@ -5,6 +5,8 @@
 #include <functional>
 #include <memory>
 #include <string>
+#include "ThreadPool/ThreadPool.hpp"
+
 namespace websocket_handler {
 
     class WebsocketClientHandler : public WebsocketClient{
@@ -24,7 +26,7 @@ namespace websocket_handler {
 
     private:
         std::mutex m_client_handler_mutex;
-        std::vector<std::thread> worker_threads_;
+        std::unique_ptr<ThreadPool> run_thread_pool_;
     };
 
 } // namespace websocket_handler

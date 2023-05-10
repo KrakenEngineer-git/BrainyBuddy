@@ -10,6 +10,7 @@ cc_library(
         "//DiscordEventHandler:discord_event_handler",
         "//WebSocketHandler/impl:websocket_handler_lib",
         "//utilities",
+        "//ThreadPool:thread_pool",
     ],
     copts = [
         "-std=c++11",

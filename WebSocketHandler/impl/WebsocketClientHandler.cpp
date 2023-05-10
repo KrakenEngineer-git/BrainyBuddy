@@ -6,18 +6,14 @@ namespace websocket_handler {
            set_client_handlers();
     }
 
-    WebsocketClientHandler::~WebsocketClientHandler()
-    {
-        for (auto& thread : worker_threads_) {
-            thread.join();
-        }       
-    }
+    WebsocketClientHandler::~WebsocketClientHandler() = default;
 
     void WebsocketClientHandler::set_client_handlers() 
     {
         std::lock_guard<std::mutex> lock(m_client_handler_mutex);
         try
         {
+            run_thread_pool_ = make_unique<ThreadPool>(1);
             ws_client_.set_access_channels(websocketpp::log::alevel::connect | websocketpp::log::alevel::disconnect);
             ws_client_.set_error_channels(websocketpp::log::elevel::info | websocketpp::log::elevel::warn | websocketpp::log::elevel::rerror | websocketpp::log::elevel::fatal);
             ws_client_.set_open_handler(std::bind(&WebsocketClientHandler::on_open, this, std::placeholders::_1));
@@ -56,7 +52,7 @@ namespace websocket_handler {
             std::cout<<"Connected!"<<std::endl;
 
             std::cout<<"Trying to run..."<<std::endl;
-            worker_threads_.emplace_back([this]() {
+            run_thread_pool_->enqueue_task([this]() {
                 ws_client_.run();
             });
             std::cout<<"Runned!"<<std::endl;
