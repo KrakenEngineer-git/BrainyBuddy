@@ -19,32 +19,56 @@ This BrainyBuddy bot is designed to answer questions using OpenAI's GPT-3.5 Turb
 + Boost library
 - curl library
 * ASIO library
+* Docker (optional)
 
 ## How to build and run
 
+### Without Docker
 1. Install the required dependencies on your system:
 For Ubuntu and similar systems, you can run:
  ```
  sudo apt-get install build-essential libboost-all-dev libasio-dev libcurl4-openssl-dev
  ```
+2. Then, follow the official Bazel installation guide for Ubuntu to install Bazel: https://docs.bazel.build/versions/main/install-ubuntu.html
+3. Clone this repository and navigate to the project folder.
 
-2. Clone this repository and navigate to the project folder.
-
-3. Set up your API tokens for both Discord and OpenAI's GPT-3 as environment variables:
+4. Set up your API tokens for both Discord and OpenAI's GPT-3 as environment variables:
 ```
-export DISCORD_BOT_TOKEN=<your-discord-bot-token>
-export OPENAI_API_KEY=<your-openai-api-key>
+export DISCORD_BOT_TOKEN=your-discord-bot-token
+export OPENAI_API_KEY=your-openai-api-key
 ```
-<sub>Replace <your-discord-bot-token> and <your-openai-api-key> with your actual Discord bot token and OpenAI API key, respectively.<sub>
+<sub>Replace discord-bot-token and openai-api-key with your actual Discord bot token and OpenAI API key, respectively.<sub>
 
-4. To build and run the bot, execute the following command:
+5. To build and run the bot, execute the following command:
 ```
 bazel --batch run //:my_bot
 ```
 <sub>This command runs Bazel in batch mode to avoid potential memory leaks associated with the Bazel server.<sub>
 
-5. The bot will connect to Discord and start monitoring messages.
+6. The bot will connect to Discord and start monitoring messages.
 
+### With Docker
+1. Install Docker on your system.
+
+2. Clone this repository and navigate to the project folder.
+
+3. Create a .env file in the project folder with the following content:
+```
+DISCORD_BOT_TOKEN=your-discord-bot-token
+OPENAI_API_KEY=your-openai-api-key
+ ```
+<sub>Replace discord-bot-token and openai-api-key with your actual Discord bot token and OpenAI API key, respectively.<sub>
+ 
+3. Build the Docker image:
+ ```
+docker build -t brainybuddy:latest .
+ ```
+4. Run the Docker container:
+ ```
+docker run -d --name brainybuddy-container --env-file .env brainybuddy:latest
+ ```
+5. The bot will connect to Discord and start monitoring messages.
+ 
 ## Configuration
 To use this bot, you need to set up a Discord bot account and provide your API tokens for both Discord and OpenAI's GPT-3. Update the environment variables with the appropriate tokens and any other necessary settings.
 
