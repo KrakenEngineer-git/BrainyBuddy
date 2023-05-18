@@ -15,16 +15,20 @@ public:
     bool is_question(const std::string &input);
 
 private:
-    bool is_question_based_on_punctuation(const std::string &input);
-    bool is_question_based_on_keywords(const std::string &input);
-    bool is_question_based_on_embeddings(const std::string &input);
-    std::vector<float> get_text_embedding(const std::string &text);
-    float cosine_similarity(const std::vector<float> &a, const std::vector<float> &b);
+    void setupCurlHandler();
+    void setupThreadPool();
+    void generateExampleEmbeddings();
+    std::string enqueueTask(const std::string &url, const std::string &data);
+    bool isQuestionBasedOnPunctuation(const std::string &input);
+    bool isQuestionBasedOnKeywords(const std::string &input);
+    bool isQuestionBasedOnEmbeddings(const std::string &input);
+    std::vector<float> getTextEmbedding(const std::string &text);
+    float cosineSimilarity(const std::vector<float> &a, const std::vector<float> &b);
     std::unique_ptr<CurlHandler> curl_handler_;
     std::string api_key_;
     std::vector<std::vector<float>> example_question_embeddings_;
     
-    std::vector<std::string> question_examples = {
+    std::vector<std::string> question_examples_ = {
         "What is the capital of France?",
         "How does photosynthesis work?",
         "What are the main components of a computer?",

@@ -3,6 +3,8 @@ cc_library(
     srcs = [
         "ThreadPool.cpp",
         "ThreadPool.hpp",
+        "Worker.cpp",
+        "Worker.hpp",
     ],
     visibility = ["//visibility:public"],
 )

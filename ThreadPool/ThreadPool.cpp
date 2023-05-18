@@ -1,43 +1,18 @@
 #include "ThreadPool.hpp"
+#include <iostream>
 
-ThreadPool::ThreadPool(size_t num_threads)
-    : stop_(false) {
-    for (size_t i = 0; i < num_threads; ++i) {
-        workers_.emplace_back([this]() { worker(); });
-    }
-}
+ThreadPool::ThreadPool(size_t num_workers) : workers_(num_workers), next_worker_(0) {}
 
 ThreadPool::~ThreadPool() {
-    {
-        std::unique_lock<std::mutex> lock(tasks_mutex_);
-        stop_ = true;
-    }
-    tasks_cv_.notify_all();
-    for (std::thread &worker : workers_) {
+    std::cout << "ThreadPool destructor called" << std::endl;
+    for (auto& worker : workers_) {
+        worker.stop();
         worker.join();
     }
 }
 
 void ThreadPool::enqueue_task(std::function<void()> task) {
-    {
-        std::unique_lock<std::mutex> lock(tasks_mutex_);
-        tasks_.push(task);
-    }
-    tasks_cv_.notify_one();
-}
+    workers_[next_worker_].enqueue_task(task);
 
-void ThreadPool::worker() {
-    while (true) {
-        std::function<void()> task;
-        {
-            std::unique_lock<std::mutex> lock(tasks_mutex_);
-            tasks_cv_.wait(lock, [this]() { return !tasks_.empty() || stop_; });
-            if (stop_ && tasks_.empty()) {
-                break;
-            }
-            task = tasks_.front();
-            tasks_.pop();
-        }
-        task();
-    }
+    next_worker_ = (next_worker_ + 1) % workers_.size();
 }
