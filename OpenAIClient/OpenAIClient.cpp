@@ -62,9 +62,15 @@ std::string OpenAIClient::generate_response(const std::string &input, const std:
         });
 
         response = response_future.get();
-        std::cout << "Response: " << response << std::endl;
+
         nlohmann::json response_json = nlohmann::json::parse(response);
-        generated_text += response_json["choices"][0]["message"]["content"];
+
+        if (response_json.contains("choices") && !response_json["choices"].empty()) {
+            auto message = response_json["choices"][0].value("message", nlohmann::json::object());
+            if (!message.empty()) {
+                generated_text += message.value("content", "");
+            }
+        }   
 
         if (generated_text.back() == '.' || generated_text.back() == '?' || generated_text.back() == '!')
         {
@@ -82,7 +88,10 @@ std::string OpenAIClient::generate_response(const std::string &input, const std:
 
 bool OpenAIClient::is_question(const std::string &input)
 {
+    std::cout<<"Checking if question"<<std::endl;
     int count = 0;
+    float weight_rule_based = 0.6f;
+    float weight_embeddings = 0.4f;
 
     if (is_question_based_on_punctuation(input))
     {
@@ -90,15 +99,15 @@ bool OpenAIClient::is_question(const std::string &input)
     }
     else if (is_question_based_on_keywords(input))
     {
-        count++;
+        count += weight_rule_based;
     }
 
     if (is_question_based_on_embeddings(input))
     {
-        count++;
+        count += weight_embeddings;
     }
 
-    return count >= 2;
+    return count >= (1.0f + weight_rule_based * 0.5f);
 }
 
 bool OpenAIClient::is_question_based_on_punctuation(const std::string &input)
@@ -108,9 +117,10 @@ bool OpenAIClient::is_question_based_on_punctuation(const std::string &input)
 
 bool OpenAIClient::is_question_based_on_keywords(const std::string &input)
 {
+    std::cout << "Checking if question based on keywords" << std::endl;
     std::string lower_input = input;
     std::transform(lower_input.begin(), lower_input.end(), lower_input.begin(), ::tolower);
-    const std::vector<std::string> question_words = {"what", "how", "where", "when", "why", "who", "which", "is", "are", "do", "does", "did", "can", "could", "would", "will", "shall"};
+    const std::vector<std::string> question_words = {"what", "how", "where", "when", "why", "who", "which", "is", "are", "do", "does", "did", "can", "could", "would", "will", "shall", "explain", "define", "describe"};
 
     std::stringstream input_stream(lower_input);
     std::string first_word;
@@ -129,6 +139,7 @@ bool OpenAIClient::is_question_based_on_keywords(const std::string &input)
 
 bool OpenAIClient::is_question_based_on_embeddings(const std::string &input)
 {
+    std::cout << "Checking if question based on embeddings" << std::endl;
     std::vector<float> input_embedding = get_text_embedding(input);
 
     float average_similarity = 0.0f;
@@ -139,15 +150,15 @@ bool OpenAIClient::is_question_based_on_embeddings(const std::string &input)
     }
     average_similarity /= example_question_embeddings_.size();
 
-    const float similarity_threshold = 0.7f;
+    const float similarity_threshold = 0.65f; 
     return average_similarity >= similarity_threshold;
 }
 
 
 std::vector<float> OpenAIClient::get_text_embedding(const std::string &text)
 {
+    std::cout << "Getting text embedding for text: " << text << std::endl;
     std::string url = "https://api.openai.com/v1/embeddings";
-
     nlohmann::json payload = {
         {"input", text},
         {"model", "text-embedding-ada-002"}
@@ -157,18 +168,36 @@ std::vector<float> OpenAIClient::get_text_embedding(const std::string &text)
     std::string response;
     std::promise<std::string> response_promise;
     std::future<std::string> response_future = response_promise.get_future();
+
     thread_pool_->enqueue_task([this, &url, &data, &response, &response_promise]() {
-        response = curl_handler_->post(url, data, true);
-        response_promise.set_value(response);
+        try {
+            response = curl_handler_->post(url, data, true);
+            response_promise.set_value(response);
+        } catch (const std::exception& e) {
+            response_promise.set_exception(std::current_exception());
+        }
     });
 
-    response = response_future.get();
+    try {
+        response = response_future.get();
+    } catch (const std::exception& e) {
+        std::cerr << "Error getting text embedding: " << e.what() << std::endl;
+        return std::vector<float>();
+    }
 
-    nlohmann::json response_json = nlohmann::json::parse(response);
+    try {
+        nlohmann::json response_json = nlohmann::json::parse(response);
+        if (response_json.contains("data") && !response_json["data"].empty()) {
+            auto embedding_json = response_json["data"][0].value("embedding", nlohmann::json::object());
+            if (!embedding_json.empty()) {
+                return embedding_json.get<std::vector<float>>();
+            }
+        }
+    } catch (const std::exception& e) {
+        std::cerr << "Error parsing text embedding response: " << e.what() << std::endl;
+    }
 
-    std::vector<float> embedding = response_json["data"][0]["embedding"].get<std::vector<float>>();
-
-    return embedding;
+    return std::vector<float>();
 }
 
 

@@ -9,8 +9,8 @@ namespace discord
             curlHandler->AddHeader("Authorization: Bot " + bot_token_);
             curlHandler->AddHeader("Content-Type: application/json");
 
-            worker_threads_pool_ = make_unique<ThreadPool>(4);
-            event_handling_pool_ = make_unique<ThreadPool>(worker_threads_count_);
+            event_handling_pool_ = make_unique<ThreadPool>(4);
+            worker_threads_pool_ = make_unique<ThreadPool>(worker_threads_count_);
             task_pool_ = make_unique<ThreadPool>(2);
 
         } catch (const std::exception& e) {
@@ -139,8 +139,6 @@ namespace discord
                     nlohmann::json event_data = event_queue_.front();
                     event_queue_.pop();
                     lock.unlock();
-
-                    std::cout << "Event data: " << event_data << std::endl;
                     // Check if the "content" value is not null before accessing it
                     if (!event_data.is_null()) {
                         if (event_data.value("action", "NOT FOUND") == "send_message") {

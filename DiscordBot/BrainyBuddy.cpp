@@ -3,6 +3,7 @@
 #include <iostream>
 #include <memory>
 #include <thread>
+#include <boost/asio.hpp>
 
 BrainyBuddy::BrainyBuddy()
 {

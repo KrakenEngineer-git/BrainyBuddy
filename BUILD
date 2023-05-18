@@ -7,6 +7,6 @@ cc_binary(
     copts = [
         "-Iexternal/nlohmann_json/include",
     ],
-    linkopts = ["-lssl", "-lcrypto"],
+    linkopts = ["-pthread"],
     visibility = ["//visibility:public"],
 )

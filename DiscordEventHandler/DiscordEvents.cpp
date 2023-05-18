@@ -26,7 +26,11 @@ nlohmann::json DiscordEvents::on_message_create(const nlohmann::json& data,Check
 
         std::string response = "";
 
-        check_if_question(content) ?  response = response_callback(content,username) : response;
+        bool is_question =  check_if_question(content);
+
+        std::cout<<"Is question: "<<is_question<<std::endl; 
+
+        is_question ?  response = response_callback(content,username) : response;
         
         /*Check if the response is not empty*/
         if (!response.empty()) {
