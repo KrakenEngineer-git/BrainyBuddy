@@ -1,29 +1,30 @@
-# Use an official Ubuntu base image
-FROM ubuntu:20.04
+# Use the official Bazel image
+FROM gcr.io/bazel-public/bazel:latest
 
-# Prevent interactive prompts during package installation
-ARG DEBIAN_FRONTEND=noninteractive
+LABEL name="brainybuddy"
 
-# Update the package list and install required dependencies
-RUN apt-get update && \
-    apt-get install -y --no-install-recommends \
+USER root
+
+# Install required dependencies
+RUN apt-get update && apt-get install -y --no-install-recommends \
         build-essential \
-        libboost-all-dev \
+        libboost-dev \
+        libboost-filesystem-dev \
+        libboost-system-dev \
+        libboost-thread-dev \
         libasio-dev \
         libcurl4-openssl-dev \
+        libssl-dev \
         curl \
         gnupg \
-        ca-certificates && \
-    apt-get clean && \
-    rm -rf /var/lib/apt/lists/*
-
-# Install Bazel
-RUN echo "deb [arch=amd64] https://storage.googleapis.com/bazel-apt stable jdk1.8" | tee /etc/apt/sources.list.d/bazel.list && \
-    curl https://bazel.build/bazel-release.pub.gpg | apt-key add - && \
-    apt-get update && \
-    apt-get install -y bazel && \
-    apt-get clean && \
-    rm -rf /var/lib/apt/lists/*
+        openjdk-11-jdk \
+        bash \
+        zip \
+        unzip \
+        python3 \
+        git \
+        patch \
+    && rm -rf /var/lib/apt/lists/*
 
 # Set the working directory
 WORKDIR /app
@@ -32,7 +33,8 @@ WORKDIR /app
 COPY . /app
 
 # Set up your API tokens as environment variables
-CMD DISCORD_BOT_TOKEN=$DISCORD_BOT_TOKEN OPENAI_API_KEY=$OPENAI_API_KEY ./bazel-bin/my_bot
+ENV DISCORD_BOT_TOKEN=$DISCORD_BOT_TOKEN
+ENV OPENAI_API_KEY=$OPENAI_API_KEY
 
-# Start the bot
-CMD ["bazel", "--batch", "run", "//:my_bot"]
+# Set the entrypoint
+ENTRYPOINT ["bazel", "run", "//:my_bot"]

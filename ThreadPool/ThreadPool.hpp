@@ -7,22 +7,19 @@
 #include <functional>
 #include <mutex>
 #include <condition_variable>
+#include "Worker.hpp"
 
 class ThreadPool {
 public:
-    ThreadPool(size_t num_threads);
+    ThreadPool(size_t num_workers);
+
     ~ThreadPool();
 
     void enqueue_task(std::function<void()> task);
 
 private:
-    void worker();
-
-    std::vector<std::thread> workers_;
-    std::queue<std::function<void()>> tasks_;
-    std::mutex tasks_mutex_;
-    std::condition_variable tasks_cv_;
-    bool stop_;
+    std::vector<Worker> workers_;
+    size_t next_worker_; 
 };
 
 #endif // THREAD_POOL_HPP

@@ -9,8 +9,8 @@ namespace discord
             curlHandler->AddHeader("Authorization: Bot " + bot_token_);
             curlHandler->AddHeader("Content-Type: application/json");
 
-            worker_threads_pool_ = make_unique<ThreadPool>(4);
-            event_handling_pool_ = make_unique<ThreadPool>(worker_threads_count_);
+            event_handling_pool_ = make_unique<ThreadPool>(4);
+            worker_threads_pool_ = make_unique<ThreadPool>(worker_threads_count_);
             task_pool_ = make_unique<ThreadPool>(2);
 
         } catch (const std::exception& e) {
@@ -36,7 +36,6 @@ namespace discord
     DiscordClient::~DiscordClient()
     {
         stop();
-        stop_threads_ = true;
         std::cout << "DiscordClient destructor called" << std::endl;
     }
 
@@ -103,16 +102,12 @@ namespace discord
 
     void DiscordClient::setup_event_handler() 
     {
-            event_handler_.register_event_handler("MESSAGE_CREATE", [this](const nlohmann::json& data) {
-
+        event_handler_.register_event_handler("MESSAGE_CREATE", [this](const nlohmann::json& data) {
             process_event(data, false);
-
         });
 
         event_handler_.register_event_handler("MESSAGE_UPDATE", [this](const nlohmann::json& data) {
-
             process_event(data, true);
-            
         });
 
 
@@ -139,9 +134,6 @@ namespace discord
                     nlohmann::json event_data = event_queue_.front();
                     event_queue_.pop();
                     lock.unlock();
-
-                    std::cout << "Event data: " << event_data << std::endl;
-                    // Check if the "content" value is not null before accessing it
                     if (!event_data.is_null()) {
                         if (event_data.value("action", "NOT FOUND") == "send_message") {
                             send_message(event_data.value("channel_id", "NOT FOUND"), event_data.value("content", "NOT FOUND"), event_data.value("message_id", "NOT FOUND"));
@@ -232,7 +224,7 @@ namespace discord
             }
             else
             {
-                std::cout << "Identify payload sent." << std::endl;
+                std::cout << "Identify payload sent error." << std::endl;
             }
         });
 
