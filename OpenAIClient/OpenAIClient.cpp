@@ -12,14 +12,22 @@ constexpr float SIMILARITY_THRESHOLD = 0.65f;
 
 OpenAIClient::OpenAIClient(const std::string &api_key) : api_key_(api_key)
 {
+    running_ = true;
     setupCurlHandler();
     setupThreadPool();
     generateExampleEmbeddings();
 }
 
+OpenAIClient::~OpenAIClient()
+{
+    std::cout << "OpenAIClient destructor called" << std::endl;
+    running_ = false;
+}
+
 void OpenAIClient::setupCurlHandler()
 {
     curl_handler_ = make_unique<CurlHandler>();
+    //curl_handler_->SetTimeout(10L);
     curl_handler_->AddHeader("Authorization: Bearer " + api_key_);
     curl_handler_->AddHeader("Content-Type: application/json");
 }
@@ -39,6 +47,7 @@ void OpenAIClient::generateExampleEmbeddings()
 
 std::string OpenAIClient::generate_response(const std::string &input, const std::string &author_username)
 {
+    std::cout<<"OpenAIClient::generate_response"<<std::endl;
     if (input.empty()) {
         throw std::invalid_argument("Input cannot be empty.");
     }
@@ -72,17 +81,23 @@ std::string OpenAIClient::generate_response(const std::string &input, const std:
     {
         auto response = enqueueTask(url, data);
 
+        if (!nlohmann::json::accept(response)) {
+            throw std::runtime_error("Invalid JSON received from the API");
+        }
+
         nlohmann::json response_json = nlohmann::json::parse(response);
 
-        if (response_json.contains("choices") && !response_json["choices"].empty()) {
-            auto message = response_json["choices"][0].value("message", nlohmann::json::object());
-            if (!message.empty()) {
-                generated_text += message.value("content", "");
-            }
-        }   
+        if (response_json.contains("error")) {
+            throw std::runtime_error("Error from the API: " + response_json["error"].get<std::string>());
+        }
 
-        if (generated_text.empty() || generated_text.back() == '.' || generated_text.back() == '?' || generated_text.back() == '!')
-        {
+        if (!response_json.contains("choices") || response_json["choices"].empty()) {
+            throw std::runtime_error("Unexpected response from the API");
+        }  
+
+        generated_text += response_json["choices"][0]["message"]["content"].get<std::string>();
+
+        if (generated_text.empty() || generated_text.back() == '.' || generated_text.back() == '?' || generated_text.back() == '!') {
             break;
         }
 
@@ -93,26 +108,36 @@ std::string OpenAIClient::generate_response(const std::string &input, const std:
     return generated_text;
 }
 
+
 std::string OpenAIClient::enqueueTask(const std::string &url, const std::string &data)
 {
     std::promise<std::string> response_promise;
     std::future<std::string> response_future = response_promise.get_future();
     
-    thread_pool_->enqueue_task([this, &url, &data, &response_promise]() {
-        try {
-            std::string response = curl_handler_->post(url, data, true);
-            response_promise.set_value(response);
-        } catch (const std::exception &e) {
-            response_promise.set_exception(std::current_exception());
-        }
-    });
+    if(running_)
+    {
+        thread_pool_->enqueue_task([this, &url, &data, &response_promise]() {
+            try {
+                std::string response = curl_handler_->post(url, data, true);
 
-    try {
-        return response_future.get();
-    } catch (const std::exception &e) {
-        std::cerr << "Error in task: " << e.what() << std::endl;
-        throw;
+                if (response.empty()) {
+                    throw std::runtime_error("Empty response received from the curl request");
+                }
+
+                response_promise.set_value(response);
+            } catch (const std::exception &e) {
+                response_promise.set_exception(std::current_exception());
+            }
+        });
+
+        try {
+            return response_future.get();
+        } catch (const std::exception &e) {
+            std::cerr << "Error in task: " << e.what() << std::endl;
+            throw;
+        }
     }
+    return std::string();
 }
 
 bool OpenAIClient::is_question(const std::string &input)

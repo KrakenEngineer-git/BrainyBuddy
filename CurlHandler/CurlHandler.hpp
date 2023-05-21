@@ -15,6 +15,8 @@ public:
 
     void AddHeader(const std::string& header);
 
+    void SetTimeout(long timeout);
+    std::string URLEncode(const std::string& input);
     std::string Get(const std::string& url);
     std::string post(const std::string& url, const std::string& payload, bool get_response);
 

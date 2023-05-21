@@ -5,11 +5,14 @@
 #include <thread>
 #include <boost/asio.hpp>
 
+BrainyBuddy* BrainyBuddy::instance_ = nullptr;
+std::atomic<bool> BrainyBuddy::quit_(false);
+
 BrainyBuddy::BrainyBuddy()
 {
     const char *token_env_var = std::getenv("DISCORD_BOT_TOKEN");
     const char *openai_api_key_env_var = std::getenv("OPENAI_API_KEY");
-
+    instance_ = this;
     if (token_env_var == nullptr)
     {
         throw std::runtime_error("Error: DISCORD_BOT_TOKEN environment variable is not set");
@@ -25,14 +28,34 @@ BrainyBuddy::BrainyBuddy()
 
     try {
         openai_client_ = make_unique<OpenAIClient>(openai_api_key_);
+        std::signal(SIGINT, signalHandler);
     } catch (const std::exception& e) {
         std::cerr << e.what() << '\n';
     }
 }
 
+BrainyBuddy* BrainyBuddy::getInstance()
+{
+    return instance_;
+}
+
+void BrainyBuddy::signalHandler(int signal) {
+    std::cout << "Signal received: " << signal << std::endl;
+    getInstance()->cleanup();
+    quit_.store(true);
+    std::exit(signal);
+}
+
+void BrainyBuddy::cleanup()
+{
+    if (discord_client_) {
+        discord_client_->stop();  
+    }
+}
+
 BrainyBuddy::~BrainyBuddy()
 {
-    discord_client_->stop();
+    cleanup();
     std::cout << "BrainyBuddy destructor called" << std::endl;
 }
 
@@ -48,11 +71,16 @@ void BrainyBuddy::run()
 
     try {
         discord_client_ = make_unique<discord::DiscordClient>(bot_token_,check_if_question,response_callback);
+        while (!quit_.load()) {
+            discord_client_->run(); 
+        } 
     } catch (const std::exception& e) {
         std::cerr << e.what() << '\n';
+    } catch (...) {
+        cleanup();  
+        throw; 
     }
-    
-    discord_client_->run();
+    cleanup();
 }
 
 bool BrainyBuddy::check_if_question(const std::string &input)
@@ -64,4 +92,3 @@ std::string BrainyBuddy::get_openai_response(const std::string &input,const std:
 {
     return openai_client_->generate_response(input,author_username);
 }
-

@@ -48,9 +48,8 @@ private:
     DiscordEvents::CheckIfIsAQuestion check_if_question_;
     DiscordEvents::ResponseCallback response_callback_;
     discord::DiscordEventHandler event_handler_;
-    std::atomic<bool> stop_threads_;
     int last_sequence_ = -1;
-    bool running_;
+    std::atomic<bool> running_;
     
     std::map<std::string, std::string> headers = {
         {"Authorization", "Bot " + bot_token_}

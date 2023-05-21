@@ -52,7 +52,15 @@ void Worker::run() {
             task = std::move(tasks_.front());
             tasks_.pop();
         }
-        task();
+        
+        try {
+            task();
+        } catch (const std::exception& e) {
+            std::cerr << "Exception in worker task: " << e.what() << std::endl;
+        } catch (...) {
+            std::cerr << "Unknown exception in worker task" << std::endl;
+        }
     }
 }
+
 

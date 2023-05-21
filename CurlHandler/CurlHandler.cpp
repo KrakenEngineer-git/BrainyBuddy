@@ -20,10 +20,24 @@ void CurlHandler::AddHeader(const std::string& header) {
     headers = curl_slist_append(headers, header.c_str());
 }
 
+void CurlHandler::SetTimeout(long timeout) {
+    curl_easy_setopt(curl, CURLOPT_TIMEOUT, timeout);
+}
+
 size_t CurlHandler::WriteCallback(void* contents, size_t size, size_t nmemb, std::string* userp) {
     size_t totalSize = size * nmemb;
     userp->append((char*)contents, totalSize);
     return totalSize;
+}
+
+std::string CurlHandler::URLEncode(const std::string& input) {
+    char* output = curl_easy_escape(curl, input.c_str(), input.length());
+    if (!output) {
+        throw std::runtime_error("URL encoding failed.");
+    }
+    std::string output_str(output);
+    curl_free(output);
+    return output_str;
 }
 
 std::string CurlHandler::Get(const std::string& url) {
@@ -42,6 +56,7 @@ std::string CurlHandler::Get(const std::string& url) {
 
     return readBuffer;
 }
+
 
 std::string CurlHandler::post(const std::string& url, const std::string& payload, bool get_response) {
     std::string readBuffer;

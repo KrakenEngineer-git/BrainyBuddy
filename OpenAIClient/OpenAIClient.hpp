@@ -6,11 +6,13 @@
 #include "CurlHandler/CurlHandler.hpp"
 #include "utilities/utilities.hpp"
 #include "ThreadPool/ThreadPool.hpp"
+#include <atomic>
 
 class OpenAIClient
 {
 public:
     OpenAIClient(const std::string &api_key);
+    ~OpenAIClient();
     std::string generate_response(const std::string &input,const std::string &author_username);
     bool is_question(const std::string &input);
 
@@ -27,6 +29,7 @@ private:
     std::unique_ptr<CurlHandler> curl_handler_;
     std::string api_key_;
     std::vector<std::vector<float>> example_question_embeddings_;
+    std::atomic<bool> running_;
     
     std::vector<std::string> question_examples_ = {
         "What is the capital of France?",

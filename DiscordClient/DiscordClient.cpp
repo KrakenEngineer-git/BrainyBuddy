@@ -1,17 +1,32 @@
 #include "DiscordClient.hpp"
+
+constexpr int EVENT_THREADS_NUMBER = 4;
+constexpr int WORKER_THREADS_NUMBER = 4;
+constexpr int TASK_THREADS_NUMBER = 2;
+
+// Opcode and Intent constants for better readability
+constexpr int OPCODE_HEARTBEAT_ACK = 11;
+constexpr int OPCODE_HELLO = 10;
+constexpr int OPCODE_HEARTBEAT = 1;
+constexpr int OPCODE_IDENTIFY = 2;
+constexpr int INTENT_GUILD_MESSAGES = 1 << 9;
+constexpr int INTENT_MESSAGE_CONTENT = 1 << 15;
+
 namespace discord 
 {
     DiscordClient::DiscordClient(const std::string& bot_token, DiscordEvents::CheckIfIsAQuestion check_if_question, DiscordEvents::ResponseCallback response_callback)
-        : bot_token_(bot_token), worker_threads_count_(4), check_if_question_(check_if_question), response_callback_(response_callback), stop_threads_(false),
+        : bot_token_(bot_token), check_if_question_(check_if_question), response_callback_(response_callback),
         curlHandler(make_unique<CurlHandler>()) {
         try {
             client_handler_ptr = make_unique<websocket_handler::WebsocketClientHandler>();
             curlHandler->AddHeader("Authorization: Bot " + bot_token_);
             curlHandler->AddHeader("Content-Type: application/json");
 
-            event_handling_pool_ = make_unique<ThreadPool>(4);
-            worker_threads_pool_ = make_unique<ThreadPool>(worker_threads_count_);
-            task_pool_ = make_unique<ThreadPool>(2);
+            event_handling_pool_ = make_unique<ThreadPool>(EVENT_THREADS_NUMBER);
+            worker_threads_pool_ = make_unique<ThreadPool>(WORKER_THREADS_NUMBER);
+            task_pool_ = make_unique<ThreadPool>(TASK_THREADS_NUMBER);
+
+            worker_threads_count_ = WORKER_THREADS_NUMBER;
 
         } catch (const std::exception& e) {
             std::cerr << e.what() << '\n';
@@ -30,7 +45,7 @@ namespace discord
 
     void DiscordClient::stop() 
     {
-        running_ = false;   
+        running_ = false; 
     }
 
     DiscordClient::~DiscordClient()
@@ -124,10 +139,10 @@ namespace discord
                 {
                     std::unique_lock<std::mutex> lock(mutex_);
                     condition_variable_.wait(lock, [this]() {
-                        return !event_queue_.empty() || stop_threads_;
+                        return !event_queue_.empty() || !running_;
                     });
 
-                    if (stop_threads_) {
+                    if (!running_) {
                         return;
                     }
 
@@ -177,11 +192,11 @@ namespace discord
         }
 
         task_pool_->enqueue_task([this, interval_ms]() {
-            while (!stop_threads_) {
+            while (running_) {
                 std::cout << "Heartbeat thread sleeping for " << interval_ms << " milliseconds" << std::endl;
                 std::this_thread::sleep_for(std::chrono::milliseconds(interval_ms));
                 nlohmann::json heartbeat_payload;
-                heartbeat_payload["op"] = 1; // Opcode for Heartbeat
+                heartbeat_payload["op"] = OPCODE_HEARTBEAT;
                 heartbeat_payload["d"] = last_sequence_;
 
                 if (client_handler_ptr->is_connected()) {
@@ -202,10 +217,10 @@ namespace discord
         task_pool_->enqueue_task([this]() {
             std::cout << "Identifying..." << std::endl;
             nlohmann::json identify_payload{
-                {"op", 2},
+                {"op", OPCODE_IDENTIFY},
                 {"d", {
                     {"token", bot_token_},
-                    {"intents", (1 << 9) | (1 << 15)}, // Add the GUILD_MESSAGES and MESSAGE_CONTENT intents
+                    {"intents",  INTENT_GUILD_MESSAGES | INTENT_MESSAGE_CONTENT}, // Add the GUILD_MESSAGES and MESSAGE_CONTENT intents
                     {"properties", {
                         {"$os", "linux"},
                         {"$browser", "disco"},
@@ -243,11 +258,7 @@ namespace discord
         connect(uri);
     }
     
-    void DiscordClient::send_message(const std::string& channel_id, const std::string& message, const std::string& message_id)
-    {
-        std::string url = "https://discord.com/api/v10/channels/" + channel_id + "/messages";
-
-        // Include the message_reference field in the JSON payload
+    void DiscordClient::send_message(const std::string& channel_id, const std::string& message, const std::string& message_id) {
         nlohmann::json payload = {
             {"content", message},
             {"message_reference", {
@@ -255,9 +266,28 @@ namespace discord
             }}
         };
 
-        // Serialize the payload to a string
-        std::string data = payload.dump();
-        curlHandler->post(url, data, false);
-    }
+        std::string url = "https://discord.com/api/v9/channels/" + channel_id + "/messages";
 
+        for (int attempt = 0; attempt < 3; ++attempt) {
+            try {
+                std::string response = curlHandler->post(url, payload.dump(), true);
+                nlohmann::json jsonResponse = nlohmann::json::parse(response);
+
+                if (jsonResponse.contains("id")) {
+                    std::cout << "Message sent successfully. Message ID: " << jsonResponse["id"] << std::endl;
+                    return;
+                } else {
+                    std::cerr << "Failed to send message. Response: " << response << std::endl;
+                }
+            } catch (const nlohmann::json::parse_error& e) {
+                std::cerr << "Error parsing JSON response: " << e.what() << std::endl;
+            } catch (const std::exception& e) {
+                std::cerr << "Error sending message: " << e.what() << std::endl;
+            }
+
+            std::this_thread::sleep_for(std::chrono::seconds(1));
+        }
+
+        std::cerr << "All attempts to send the message failed." << std::endl;
+    }
 }
