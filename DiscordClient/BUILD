@@ -9,11 +9,9 @@ cc_library(
         "//CurlHandler:curl_handler_lib",
         "//DiscordEventHandler:discord_event_handler",
         "//WebSocketHandler/impl:websocket_handler_lib",
-        "//utilities",
         "//ThreadPool:thread_pool",
     ],
     copts = [
-        "-std=c++11",
         "-Iexternal/nlohmann_json/include",
     ],
     linkopts = ["-lcurl"],

@@ -1,0 +1,3 @@
+build --action_env=CC=/usr/bin/gcc
+build --action_env=CXX=/usr/bin/g++
+build --cxxopt=-std=c++17

@@ -15,10 +15,7 @@ public:
     ~Worker();
 
     void enqueue_task(std::function<void()> task);
-
-    void stop();
-
-    void join();
+    void wait_for_tasks_to_complete();
 
 private:
     void run();

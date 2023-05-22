@@ -1,7 +1,8 @@
 #include "DiscordClient.hpp"
 
 constexpr int EVENT_THREADS_NUMBER = 4;
-constexpr int WORKER_THREADS_NUMBER = 4;
+constexpr int CURL_THREADS_NUMBER = 2;
+constexpr int WORKER_THREADS_NUMBER = 2;
 constexpr int TASK_THREADS_NUMBER = 2;
 
 // Opcode and Intent constants for better readability
@@ -16,15 +17,15 @@ namespace discord
 {
     DiscordClient::DiscordClient(const std::string& bot_token, DiscordEvents::CheckIfIsAQuestion check_if_question, DiscordEvents::ResponseCallback response_callback)
         : bot_token_(bot_token), check_if_question_(check_if_question), response_callback_(response_callback),
-        curlHandler(make_unique<CurlHandler>()) {
+        curlHandler(std::make_unique<CurlHandler>(CURL_THREADS_NUMBER)) {
         try {
-            client_handler_ptr = make_unique<websocket_handler::WebsocketClientHandler>();
+            client_handler_ptr = std::make_unique<websocket_handler::WebsocketClientHandler>();
             curlHandler->AddHeader("Authorization: Bot " + bot_token_);
             curlHandler->AddHeader("Content-Type: application/json");
 
-            event_handling_pool_ = make_unique<ThreadPool>(EVENT_THREADS_NUMBER);
-            worker_threads_pool_ = make_unique<ThreadPool>(WORKER_THREADS_NUMBER);
-            task_pool_ = make_unique<ThreadPool>(TASK_THREADS_NUMBER);
+            event_handling_pool_ = std::make_unique<ThreadPool>(EVENT_THREADS_NUMBER);
+            worker_threads_pool_ = std::make_unique<ThreadPool>(WORKER_THREADS_NUMBER);
+            task_pool_ = std::make_unique<ThreadPool>(TASK_THREADS_NUMBER);
 
             worker_threads_count_ = WORKER_THREADS_NUMBER;
 
@@ -35,12 +36,8 @@ namespace discord
 
     void DiscordClient::run() 
     {
-        connect("wss://gateway.discord.gg/?v=10&encoding=json");
         running_ = true;
-
-        while (running_) {
-            std::this_thread::sleep_for(std::chrono::seconds(1));
-        }
+        connect("wss://gateway.discord.gg/?v=10&encoding=json");
     }
 
     void DiscordClient::stop() 
@@ -133,20 +130,18 @@ namespace discord
 
     void DiscordClient::start_worker_threads()
     {
+        std::cout << "Worker thread starting..." << std::endl;
         for (unsigned int i = 0; i < worker_threads_count_; ++i) {
             worker_threads_pool_->enqueue_task([this]() {
-                while (true)
+                while (running_)
                 {
                     std::unique_lock<std::mutex> lock(mutex_);
                     condition_variable_.wait(lock, [this]() {
-                        return !event_queue_.empty() || !running_;
+                        return !event_queue_.empty() || (event_queue_.empty() && !running_);
                     });
 
-                    if (!running_) {
-                        return;
-                    }
-
                     nlohmann::json event_data = event_queue_.front();
+
                     event_queue_.pop();
                     lock.unlock();
                     if (!event_data.is_null()) {
@@ -250,10 +245,19 @@ namespace discord
         }
     }
 
+    int retry_count = 0;
+    constexpr int MAX_RETRIES = 5;
+
     void DiscordClient::reconnect(const std::string& uri) {
-        std::cout << "Reconnecting..." << std::endl;
+        if(retry_count >= MAX_RETRIES) {
+            std::cout << "Maximum retries exceeded. Stopping bot." << std::endl;
+            running_ = false;
+            return;
+        }
+        retry_count++;
+        std::cout << "Reconnecting... Attempt " << retry_count << std::endl;
         client_handler_ptr.reset();
-        client_handler_ptr = make_unique<websocket_handler::WebsocketClientHandler>(); 
+        client_handler_ptr = std::make_unique<websocket_handler::WebsocketClientHandler>(); 
         std::this_thread::sleep_for(std::chrono::seconds(5));
         connect(uri);
     }
@@ -266,11 +270,13 @@ namespace discord
             }}
         };
 
-        std::string url = "https://discord.com/api/v9/channels/" + channel_id + "/messages";
+        std::string url = "https://discord.com/api/v10/channels/" + channel_id + "/messages";
 
         for (int attempt = 0; attempt < 3; ++attempt) {
             try {
-                std::string response = curlHandler->post(url, payload.dump(), true);
+                std::shared_ptr<ResponseFuture> response_future = curlHandler->post(url, payload.dump(), true);
+                std::string response = response_future->GetFuture().get();
+
                 nlohmann::json jsonResponse = nlohmann::json::parse(response);
 
                 if (jsonResponse.contains("id")) {
@@ -284,8 +290,6 @@ namespace discord
             } catch (const std::exception& e) {
                 std::cerr << "Error sending message: " << e.what() << std::endl;
             }
-
-            std::this_thread::sleep_for(std::chrono::seconds(1));
         }
 
         std::cerr << "All attempts to send the message failed." << std::endl;

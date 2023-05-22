@@ -1,5 +1,4 @@
 #include "WebsocketClientHandler.hpp"
-#include "utilities/utilities.hpp"
 namespace websocket_handler {
 
     WebsocketClientHandler::WebsocketClientHandler(){
@@ -13,7 +12,7 @@ namespace websocket_handler {
         std::lock_guard<std::mutex> lock(m_client_handler_mutex);
         try
         {
-            run_thread_pool_ = make_unique<ThreadPool>(1);
+            run_thread_pool_ = std::make_unique<ThreadPool>(1);
             ws_client_.set_access_channels(websocketpp::log::alevel::connect | websocketpp::log::alevel::disconnect);
             ws_client_.set_error_channels(websocketpp::log::elevel::info | websocketpp::log::elevel::warn | websocketpp::log::elevel::rerror | websocketpp::log::elevel::fatal);
             ws_client_.set_open_handler(std::bind(&WebsocketClientHandler::on_open, this, std::placeholders::_1));

@@ -9,6 +9,7 @@ constexpr int MAX_TOKENS = 200;
 constexpr double TEMPERATURE = 0.8;
 constexpr int MAX_RETRIES = 5;
 constexpr float SIMILARITY_THRESHOLD = 0.65f; 
+constexpr int CURL_THREADS_NUMBER = 2;
 
 OpenAIClient::OpenAIClient(const std::string &api_key) : api_key_(api_key)
 {
@@ -26,15 +27,14 @@ OpenAIClient::~OpenAIClient()
 
 void OpenAIClient::setupCurlHandler()
 {
-    curl_handler_ = make_unique<CurlHandler>();
-    //curl_handler_->SetTimeout(10L);
+    curl_handler_ = std::make_unique<CurlHandler>(CURL_THREADS_NUMBER);
     curl_handler_->AddHeader("Authorization: Bearer " + api_key_);
     curl_handler_->AddHeader("Content-Type: application/json");
 }
 
 void OpenAIClient::setupThreadPool()
 {
-    thread_pool_ = make_unique<ThreadPool>(4);
+    thread_pool_ = std::make_unique<ThreadPool>(4);
 }
 
 void OpenAIClient::generateExampleEmbeddings()
@@ -118,7 +118,8 @@ std::string OpenAIClient::enqueueTask(const std::string &url, const std::string 
     {
         thread_pool_->enqueue_task([this, &url, &data, &response_promise]() {
             try {
-                std::string response = curl_handler_->post(url, data, true);
+                std::shared_ptr<ResponseFuture> response_future_from_curl = curl_handler_->post(url, data, true);
+                std::string response = response_future_from_curl->GetFuture().get();
 
                 if (response.empty()) {
                     throw std::runtime_error("Empty response received from the curl request");

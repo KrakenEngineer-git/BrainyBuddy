@@ -5,14 +5,12 @@
 #include <thread>
 #include <boost/asio.hpp>
 
-BrainyBuddy* BrainyBuddy::instance_ = nullptr;
 std::atomic<bool> BrainyBuddy::quit_(false);
 
-BrainyBuddy::BrainyBuddy()
+BrainyBuddy::BrainyBuddy() : threadPool(1)
 {
     const char *token_env_var = std::getenv("DISCORD_BOT_TOKEN");
     const char *openai_api_key_env_var = std::getenv("OPENAI_API_KEY");
-    instance_ = this;
     if (token_env_var == nullptr)
     {
         throw std::runtime_error("Error: DISCORD_BOT_TOKEN environment variable is not set");
@@ -27,35 +25,26 @@ BrainyBuddy::BrainyBuddy()
     openai_api_key_ = std::string(openai_api_key_env_var);
 
     try {
-        openai_client_ = make_unique<OpenAIClient>(openai_api_key_);
-        std::signal(SIGINT, signalHandler);
+        openai_client_ = std::make_unique<OpenAIClient>(openai_api_key_);
     } catch (const std::exception& e) {
         std::cerr << e.what() << '\n';
+        throw;
     }
-}
-
-BrainyBuddy* BrainyBuddy::getInstance()
-{
-    return instance_;
-}
-
-void BrainyBuddy::signalHandler(int signal) {
-    std::cout << "Signal received: " << signal << std::endl;
-    getInstance()->cleanup();
-    quit_.store(true);
-    std::exit(signal);
 }
 
 void BrainyBuddy::cleanup()
 {
+    std::lock_guard<std::mutex> lock(mtx_);
     if (discord_client_) {
-        discord_client_->stop();  
+        discord_client_->stop();
     }
 }
 
 BrainyBuddy::~BrainyBuddy()
 {
     cleanup();
+    quit_.store(true);
+    threadPool.wait_for_tasks_to_complete();
     std::cout << "BrainyBuddy destructor called" << std::endl;
 }
 
@@ -70,18 +59,24 @@ void BrainyBuddy::run()
     };
 
     try {
-        discord_client_ = make_unique<discord::DiscordClient>(bot_token_,check_if_question,response_callback);
+        discord_client_ = std::make_unique<discord::DiscordClient>(bot_token_,check_if_question,response_callback);
+        threadPool.enqueue_task([&] {
+            discord_client_->run();
+        });
         while (!quit_.load()) {
-            discord_client_->run(); 
-        } 
+            std::this_thread::sleep_for(std::chrono::milliseconds(500));
+        }
     } catch (const std::exception& e) {
         std::cerr << e.what() << '\n';
+        cleanup();
+        throw;
     } catch (...) {
-        cleanup();  
-        throw; 
+        cleanup();
+        throw;
     }
     cleanup();
 }
+
 
 bool BrainyBuddy::check_if_question(const std::string &input)
 {

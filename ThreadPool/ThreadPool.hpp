@@ -16,6 +16,7 @@ public:
     ~ThreadPool();
 
     void enqueue_task(std::function<void()> task);
+    void wait_for_tasks_to_complete();
 
 private:
     std::vector<Worker> workers_;

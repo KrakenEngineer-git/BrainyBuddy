@@ -12,7 +12,6 @@
 
 #include "WebSocketHandler/impl/WebsocketClientHandler.hpp"
 #include "DiscordEventHandler/DiscordEventHandler.hpp"
-#include "utilities/utilities.hpp"
 #include "CurlHandler/CurlHandler.hpp"
 #include "ThreadPool/ThreadPool.hpp"
 

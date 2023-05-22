@@ -4,7 +4,6 @@
 
 #include <string>
 #include "CurlHandler/CurlHandler.hpp"
-#include "utilities/utilities.hpp"
 #include "ThreadPool/ThreadPool.hpp"
 #include <atomic>
 

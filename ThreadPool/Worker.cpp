@@ -16,18 +16,6 @@ Worker::~Worker() {
         thread_.join();
 }
 
-void Worker::join() {
-    if (thread_.joinable()) {
-        thread_.join();
-    }
-}
-
-void Worker::stop() {
-    std::lock_guard<std::mutex> lock(stop_mutex_);
-    stop_ = true;
-}
-
-
 void Worker::enqueue_task(std::function<void()> task) {
     {
         std::unique_lock<std::mutex> lock(tasks_mutex_);
@@ -36,6 +24,10 @@ void Worker::enqueue_task(std::function<void()> task) {
     tasks_cv_.notify_one();
 }
 
+void Worker::wait_for_tasks_to_complete() {
+    std::unique_lock<std::mutex> lock(tasks_mutex_);
+    tasks_cv_.wait(lock, [this]() { return tasks_.empty(); });
+}
 
 void Worker::run() {
     while (true) {

@@ -10,11 +10,10 @@ cc_library(
         "@curl//:curl",
         "//WebSocketHandler/impl:websocket_handler_lib",
         "//DiscordClient:discord_client",
-        "//utilities",
         "//OpenAIClient:openai_client",
+        "//ThreadPool:thread_pool",
     ],
     copts = [
-        "-std=c++11",
         "-Iexternal/nlohmann_json/include",
     ],
     linkopts = ["-lcurl"],
