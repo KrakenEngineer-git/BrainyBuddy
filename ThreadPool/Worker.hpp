@@ -1,22 +1,24 @@
 #ifndef WORKER_HPP
 #define WORKER_HPP
 
-#include <queue>
-#include <thread>
+#include <condition_variable>
 #include <functional>
 #include <mutex>
-#include <condition_variable>
+#include <queue>
+#include <thread>
 
-class Worker {
-public:
+class Worker
+{
+  public:
     Worker();
     ~Worker();
 
     void enqueue_task(std::function<void()> task);
     void join();
-    
+
     std::thread thread_;
-private:
+
+  private:
     void stop();
     void run();
 

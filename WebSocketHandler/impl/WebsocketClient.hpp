@@ -1,24 +1,25 @@
 #ifndef WEBSOCKET_HANDLER_IMPL_WEBSOCKETCLIENT_HPP
 #define WEBSOCKET_HANDLER_IMPL_WEBSOCKETCLIENT_HPP
 
-#include <websocketpp/config/asio_client.hpp>
-#include <websocketpp/client.hpp>
 #include <functional>
-#include <mutex>
 #include <iostream>
 #include <memory>
+#include <mutex>
+#include <websocketpp/client.hpp>
+#include <websocketpp/config/asio_client.hpp>
 
 typedef websocketpp::client<websocketpp::config::asio_tls_client> client;
-class WebsocketClient {
-public:
+class WebsocketClient
+{
+  public:
     WebsocketClient();
     ~WebsocketClient();
 
-protected:
-    typedef std::function<void(const std::string&)> MessageHandler;
+  protected:
+    typedef std::function<void(const std::string &)> MessageHandler;
     typedef std::function<void()> ConnectionHandler;
-    typedef std::function<void(int, const std::string&)> CloseHandler;
-    typedef std::function<void(const std::string& error_message)> ErrorHandler;
+    typedef std::function<void(int, const std::string &)> CloseHandler;
+    typedef std::function<void(const std::string &error_message)> ErrorHandler;
 
     virtual void set_message_handler(MessageHandler handler) = 0;
     virtual void set_open_handler(ConnectionHandler handler) = 0;
@@ -40,8 +41,8 @@ protected:
     ConnectionHandler fail_handler_;
     ErrorHandler error_handler_;
 
-private:
+  private:
     std::mutex connection_mutex_;
 };
 
-#endif //WEBSOCKET_HANDLER_IMPL_WEBSOCKETCLIENT_HPP
+#endif // WEBSOCKET_HANDLER_IMPL_WEBSOCKETCLIENT_HPP

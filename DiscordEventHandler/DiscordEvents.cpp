@@ -3,9 +3,12 @@
 #include <iostream>
 #include <regex>
 #include <vector>
-namespace discord {
+namespace discord
+{
 
-nlohmann::json DiscordEvents::on_message_create(const nlohmann::json& data,CheckIfIsAQuestion check_if_question, ResponseCallback response_callback) {
+nlohmann::json DiscordEvents::on_message_create(const nlohmann::json &data, CheckIfIsAQuestion check_if_question,
+                                                ResponseCallback response_callback)
+{
     std::string content = data.value("content", "NOT FOUND");
     std::string channelId = data.value("channel_id", "NOT FOUND");
     std::string messageId = data.value("id", "NOT FOUND");
@@ -13,33 +16,32 @@ nlohmann::json DiscordEvents::on_message_create(const nlohmann::json& data,Check
     std::string username = "NOT_FOUND";
     bool isBot = false;
 
-    if (data.contains("author")) {
+    if (data.contains("author"))
+    {
         username = data["author"].value("username", "NOT_FOUND");
         isBot = data["author"].value("bot", false);
     }
 
     nlohmann::json dataToReturn;
-    
-    if (!isBot) 
+
+    if (!isBot)
     {
-        std::cout << "User: " << username << "Send: " <<  content << std::endl;
+        std::cout << "User: " << username << "Send: " << content << std::endl;
 
         std::string response;
 
-        bool is_question =  check_if_question(content);
+        bool is_question = check_if_question(content);
 
-        std::cout<<"Is question: "<<is_question<<std::endl; 
+        std::cout << "Is question: " << is_question << std::endl;
 
-        is_question ?  response = response_callback(content,username) : response;
-        
+        is_question ? response = response_callback(content, username) : response;
+
         /*Check if the response is not empty*/
-        if (!response.empty()) {
+        if (!response.empty())
+        {
             dataToReturn = {
-                {"action","send_message"},
-                {"username", username},
-                {"content", response},
-                {"channel_id", channelId},
-                {"message_id", messageId},
+                {"action", "send_message"}, {"username", username},    {"content", response},
+                {"channel_id", channelId},  {"message_id", messageId},
             };
             return dataToReturn;
         }
@@ -47,22 +49,23 @@ nlohmann::json DiscordEvents::on_message_create(const nlohmann::json& data,Check
         {
             return nlohmann::json();
         }
-    }   
+    }
 
     return nlohmann::json();
 }
 
-nlohmann::json DiscordEvents::on_message_update(const nlohmann::json& data) {
+nlohmann::json DiscordEvents::on_message_update(const nlohmann::json &data)
+{
     // Handle MESSAGE_UPDATE event
     std::cout << "Message updated " << std::endl;
     return data;
 }
 
-nlohmann::json DiscordEvents::on_message_delete(const nlohmann::json& data) {
+nlohmann::json DiscordEvents::on_message_delete(const nlohmann::json &data)
+{
     // Handle MESSAGE_DELETE event
     std::cout << "Message deleted " << std::endl;
     return data;
 }
-
 
 } // namespace discord

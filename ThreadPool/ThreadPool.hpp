@@ -1,24 +1,25 @@
 #ifndef THREAD_POOL_HPP
 #define THREAD_POOL_HPP
 
-#include <vector>
-#include <queue>
-#include <thread>
+#include "Worker.hpp"
+#include <condition_variable>
 #include <functional>
 #include <mutex>
-#include <condition_variable>
-#include "Worker.hpp"
+#include <queue>
+#include <thread>
+#include <vector>
 
-class ThreadPool {
-public:
+class ThreadPool
+{
+  public:
     ThreadPool(size_t num_workers);
     ~ThreadPool();
 
     void enqueue_task(std::function<void()> task);
 
-private:
+  private:
     std::vector<Worker> workers_;
-    size_t next_worker_; 
+    size_t next_worker_;
 };
 
 #endif // THREAD_POOL_HPP
