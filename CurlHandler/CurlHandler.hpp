@@ -26,7 +26,7 @@ public:
     void AddHeader(const std::string& header);
 private:
     void process_requests();
-    static size_t WriteCallback(void* contents, size_t size, size_t nmemb, std::string* userp);
+    static size_t WriteCallback(void* contents, size_t size, size_t nmemb, void* userp);
     static std::string perform_curl_request(CURL* curl);
 
     curl_slist *headers = nullptr;

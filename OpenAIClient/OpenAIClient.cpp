@@ -39,11 +39,15 @@ void OpenAIClient::generateExampleEmbeddings()
 {
     for (const auto &example : question_examples_)
     {
-        example_question_embeddings_.push_back(getTextEmbedding(example));
+        try {
+            example_question_embeddings_.push_back(getTextEmbedding(example));
+        } catch (const std::exception& e) {
+            std::cerr << "Error generating example embeddings: " << e.what() << std::endl;
+        }
     }
 }
 
-std::string OpenAIClient::generate_response(const std::string &input, const std::string &author_username)
+std::string OpenAIClient::generate_response(const std::string &input, const std::string &author_username) noexcept(false)
 {
     std::cout<<"OpenAIClient::generate_response"<<std::endl;
     if (input.empty()) {
@@ -104,6 +108,7 @@ std::string OpenAIClient::generate_response(const std::string &input, const std:
 
 CurlHandler::Response OpenAIClient::enqueueTask(const std::string &url, const std::string &data)
 {
+    std::lock_guard<std::mutex> lock(curl_handler_mutex_);
     std::shared_ptr<std::promise<CurlHandler::Response>> response_promise = std::make_shared<std::promise<CurlHandler::Response>>();
     std::future<CurlHandler::Response> response_future = response_promise->get_future();
 
@@ -152,9 +157,15 @@ bool OpenAIClient::isQuestionBasedOnKeywords(const std::string &input)
     std::transform(lower_input.begin(), lower_input.end(), lower_input.begin(), ::tolower);
     const std::vector<std::string> question_words = {"what", "how", "where", "when", "why", "who", "which", "is", "are", "do", "does", "did", "can", "could", "would", "will", "shall", "explain", "define", "describe"};
 
+    lower_input = lower_input.substr(lower_input.find_first_not_of(' '));
     std::stringstream input_stream(lower_input);
     std::string first_word;
     input_stream >> first_word;
+
+    if (first_word.empty())
+    {
+        return false;
+    }
 
     for (const auto &word : question_words)
     {

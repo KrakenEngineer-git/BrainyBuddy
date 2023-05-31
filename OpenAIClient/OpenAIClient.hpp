@@ -5,6 +5,7 @@
 #include <string>
 #include "CurlHandler/CurlHandler.hpp"
 #include "ThreadPool/ThreadPool.hpp"
+#include <mutex>
 
 class OpenAIClient
 {
@@ -57,6 +58,7 @@ private:
     };
 
     std::unique_ptr<ThreadPool> thread_pool_;
+    std::mutex curl_handler_mutex_;
 
 };
 

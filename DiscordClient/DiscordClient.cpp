@@ -359,7 +359,6 @@ namespace discord
         curlHandler->enqueue_request([=]() {
             try {
                 CurlHandler::Response response = curlHandler->post(url, data, false);
-                std::cout<< response.body << std::endl;
                 if (response.http_code != 200) {
                     std::cerr << "HTTP Error: " << response.http_code << " for message: " << message << std::endl;
                 }

@@ -43,11 +43,16 @@ void CurlHandler::AddHeader(const std::string& header) {
     headers = curl_slist_append(headers, header.c_str());
 }
 
-size_t CurlHandler::WriteCallback(void* contents, size_t size, size_t nmemb, std::string* userp) {
+size_t CurlHandler::WriteCallback(void* contents, size_t size, size_t nmemb, void* userp) {
     size_t totalSize = size * nmemb;
-    userp->append((char*)contents, totalSize);
+    std::string* str = static_cast<std::string*>(userp);
+    if (!str) {
+        return 0;
+    }
+    str->append((char*)contents, totalSize);
     return totalSize;
 }
+
 
 std::string CurlHandler::Get(const std::string& url) {
     CURL* curl = curl_easy_init();
@@ -56,7 +61,7 @@ std::string CurlHandler::Get(const std::string& url) {
     }
 
     curl_easy_setopt(curl, CURLOPT_URL, url.c_str());
-    curl_easy_setopt(curl, CURLOPT_WRITEFUNCTION, WriteCallback);
+    curl_easy_setopt(curl, CURLOPT_WRITEFUNCTION, CurlHandler::WriteCallback);
 
     std::string response = perform_curl_request(curl);
 
@@ -76,12 +81,18 @@ CurlHandler::Response CurlHandler::post(const std::string& url, const std::strin
     curl_easy_setopt(curl, CURLOPT_URL, url.c_str());
     curl_easy_setopt(curl, CURLOPT_HTTPHEADER, headers);
     curl_easy_setopt(curl, CURLOPT_POSTFIELDS, payload.c_str());
+
+    std::string readBuffer;
     if (get_response) {
-        curl_easy_setopt(curl, CURLOPT_WRITEFUNCTION, WriteCallback);
+        curl_easy_setopt(curl, CURLOPT_WRITEFUNCTION, CurlHandler::WriteCallback);
+        curl_easy_setopt(curl, CURLOPT_WRITEDATA, &readBuffer);
     }
 
-    std::string readBuffer = perform_curl_request(curl);
-
+    CURLcode res = curl_easy_perform(curl);
+    if(res != CURLE_OK) {
+        throw std::runtime_error(curl_easy_strerror(res));
+    }
+    
     long http_code = 0;
     curl_easy_getinfo(curl, CURLINFO_RESPONSE_CODE, &http_code);
 
@@ -89,6 +100,7 @@ CurlHandler::Response CurlHandler::post(const std::string& url, const std::strin
 
     return {http_code, readBuffer};
 }
+
 
 
 std::string CurlHandler::perform_curl_request(CURL* curl) {
