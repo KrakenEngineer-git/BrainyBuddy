@@ -5,7 +5,6 @@
 #include <string>
 #include "CurlHandler/CurlHandler.hpp"
 #include "ThreadPool/ThreadPool.hpp"
-#include <atomic>
 
 class OpenAIClient
 {
@@ -19,7 +18,7 @@ private:
     void setupCurlHandler();
     void setupThreadPool();
     void generateExampleEmbeddings();
-    std::string enqueueTask(const std::string &url, const std::string &data);
+    CurlHandler::Response enqueueTask(const std::string &url, const std::string &data);
     bool isQuestionBasedOnPunctuation(const std::string &input);
     bool isQuestionBasedOnKeywords(const std::string &input);
     bool isQuestionBasedOnEmbeddings(const std::string &input);
@@ -28,7 +27,6 @@ private:
     std::unique_ptr<CurlHandler> curl_handler_;
     std::string api_key_;
     std::vector<std::vector<float>> example_question_embeddings_;
-    std::atomic<bool> running_;
     
     std::vector<std::string> question_examples_ = {
         "What is the capital of France?",

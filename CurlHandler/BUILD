@@ -3,8 +3,6 @@ cc_library(
     srcs = [
         "CurlHandler.cpp",
         "CurlHandler.hpp",
-        "ResponseFuture.cpp",
-        "ResponseFuture.hpp",
     ],
     deps = [
         "@curl//:source",

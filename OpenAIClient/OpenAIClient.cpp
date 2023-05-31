@@ -13,7 +13,6 @@ constexpr int CURL_THREADS_NUMBER = 2;
 
 OpenAIClient::OpenAIClient(const std::string &api_key) : api_key_(api_key)
 {
-    running_ = true;
     setupCurlHandler();
     setupThreadPool();
     generateExampleEmbeddings();
@@ -22,12 +21,11 @@ OpenAIClient::OpenAIClient(const std::string &api_key) : api_key_(api_key)
 OpenAIClient::~OpenAIClient()
 {
     std::cout << "OpenAIClient destructor called" << std::endl;
-    running_ = false;
 }
 
 void OpenAIClient::setupCurlHandler()
 {
-    curl_handler_ = std::make_unique<CurlHandler>(CURL_THREADS_NUMBER);
+    curl_handler_ = std::make_unique<CurlHandler>();
     curl_handler_->AddHeader("Authorization: Bearer " + api_key_);
     curl_handler_->AddHeader("Content-Type: application/json");
 }
@@ -81,11 +79,7 @@ std::string OpenAIClient::generate_response(const std::string &input, const std:
     {
         auto response = enqueueTask(url, data);
 
-        if (!nlohmann::json::accept(response)) {
-            throw std::runtime_error("Invalid JSON received from the API");
-        }
-
-        nlohmann::json response_json = nlohmann::json::parse(response);
+        nlohmann::json response_json = nlohmann::json::parse(response.body);
 
         if (response_json.contains("error")) {
             throw std::runtime_error("Error from the API: " + response_json["error"].get<std::string>());
@@ -108,38 +102,23 @@ std::string OpenAIClient::generate_response(const std::string &input, const std:
     return generated_text;
 }
 
-
-std::string OpenAIClient::enqueueTask(const std::string &url, const std::string &data)
+CurlHandler::Response OpenAIClient::enqueueTask(const std::string &url, const std::string &data)
 {
-    std::promise<std::string> response_promise;
-    std::future<std::string> response_future = response_promise.get_future();
-    
-    if(running_)
-    {
-        thread_pool_->enqueue_task([this, &url, &data, &response_promise]() {
-            try {
-                std::shared_ptr<ResponseFuture> response_future_from_curl = curl_handler_->post(url, data, true);
-                std::string response = response_future_from_curl->GetFuture().get();
+    std::shared_ptr<std::promise<CurlHandler::Response>> response_promise = std::make_shared<std::promise<CurlHandler::Response>>();
+    std::future<CurlHandler::Response> response_future = response_promise->get_future();
 
-                if (response.empty()) {
-                    throw std::runtime_error("Empty response received from the curl request");
-                }
-
-                response_promise.set_value(response);
-            } catch (const std::exception &e) {
-                response_promise.set_exception(std::current_exception());
-            }
-        });
-
+    curl_handler_->enqueue_request([this, url, data, response_promise]() {
         try {
-            return response_future.get();
+            CurlHandler::Response response = this->curl_handler_->post(url, data, true);
+            response_promise->set_value(response);
         } catch (const std::exception &e) {
-            std::cerr << "Error in task: " << e.what() << std::endl;
-            throw;
+            response_promise->set_exception(std::current_exception());
         }
-    }
-    return std::string();
+    });
+    return response_future.get();
 }
+
+
 
 bool OpenAIClient::is_question(const std::string &input)
 {
@@ -212,10 +191,10 @@ std::vector<float> OpenAIClient::getTextEmbedding(const std::string &text)
     };
 
     std::string data = payload.dump();
-    std::string response = enqueueTask(url, data);
+    auto response = enqueueTask(url, data);
 
     try {
-        nlohmann::json response_json = nlohmann::json::parse(response);
+        nlohmann::json response_json = nlohmann::json::parse(response.body);
         if (response_json.contains("data") && !response_json["data"].empty()) {
             auto embedding_json = response_json["data"][0].value("embedding", nlohmann::json::object());
             if (!embedding_json.empty()) {

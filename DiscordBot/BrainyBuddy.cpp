@@ -44,7 +44,6 @@ BrainyBuddy::~BrainyBuddy()
 {
     cleanup();
     quit_.store(true);
-    threadPool.wait_for_tasks_to_complete();
     std::cout << "BrainyBuddy destructor called" << std::endl;
 }
 
