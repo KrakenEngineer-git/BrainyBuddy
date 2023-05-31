@@ -1,82 +1,116 @@
 #include "CurlHandler.hpp"
-#include <stdexcept>
-#include <thread>
 
-CurlHandler::CurlHandler() : headers(nullptr) {
-    curl = curl_easy_init();
-    if(!curl) {
-        throw std::runtime_error("Curl initialization failed in CurlHandler constructor");
-    }
+CurlHandler::CurlHandler() : headers(nullptr), stop_processing_(false) {
+    request_processor_thread_ = std::thread(&CurlHandler::process_requests, this);
 }
 
 CurlHandler::~CurlHandler() {
     if (headers) {
         curl_slist_free_all(headers);
     }
-    curl_easy_cleanup(curl);
+    stop_processing_ = true;
+    request_queue_condition_variable_.notify_one();
+    if(request_processor_thread_.joinable()) {
+        request_processor_thread_.join();
+    }
+}
+
+void CurlHandler::enqueue_request(std::function<void()> request) {
+    {
+        std::lock_guard<std::mutex> lock(request_queue_mutex_);
+        request_queue_.push(request);
+    }
+    request_queue_condition_variable_.notify_one();
+}
+
+void CurlHandler::process_requests() {
+    while(!stop_processing_) {
+        std::unique_lock<std::mutex> lock(request_queue_mutex_);
+        request_queue_condition_variable_.wait(lock, [this]() {
+            return !request_queue_.empty() || stop_processing_;
+        });
+        if(stop_processing_) {
+            break;
+        }
+        std::function<void()> request = request_queue_.front();
+        request_queue_.pop();
+        lock.unlock();
+        request();
+    }
 }
 
 void CurlHandler::AddHeader(const std::string& header) {
     headers = curl_slist_append(headers, header.c_str());
 }
 
-size_t CurlHandler::WriteCallback(void* contents, size_t size, size_t nmemb, std::string* userp) {
+size_t CurlHandler::WriteCallback(void* contents, size_t size, size_t nmemb, void* userp) {
     size_t totalSize = size * nmemb;
-    userp->append((char*)contents, totalSize);
+    std::string* str = static_cast<std::string*>(userp);
+    if (!str) {
+        return 0;
+    }
+    str->append((char*)contents, totalSize);
     return totalSize;
 }
 
+
 std::string CurlHandler::Get(const std::string& url) {
-    std::string readBuffer;
+    CURL* curl = curl_easy_init();
+    if(!curl) {
+        throw std::runtime_error("Curl initialization failed in CurlHandler::Get");
+    }
 
     curl_easy_setopt(curl, CURLOPT_URL, url.c_str());
-    curl_easy_setopt(curl, CURLOPT_WRITEFUNCTION, WriteCallback);
-    curl_easy_setopt(curl, CURLOPT_WRITEDATA, &readBuffer);
+    curl_easy_setopt(curl, CURLOPT_WRITEFUNCTION, CurlHandler::WriteCallback);
+
+    std::string response = perform_curl_request(curl);
+
+    curl_easy_cleanup(curl);
+
+    return response;
+}
+
+CurlHandler::Response CurlHandler::post(const std::string& url, const std::string& payload, bool get_response) {
+    CURL* curl = curl_easy_init();
+    if(!curl) {
+        throw std::runtime_error("Curl initialization failed in CurlHandler::post");
+    }
+
+    curl_easy_setopt(curl, CURLOPT_CUSTOMREQUEST, "POST");  
+    curl_easy_setopt(curl, CURLOPT_SSL_VERIFYPEER, 0L);
+    curl_easy_setopt(curl, CURLOPT_URL, url.c_str());
+    curl_easy_setopt(curl, CURLOPT_HTTPHEADER, headers);
+    curl_easy_setopt(curl, CURLOPT_POSTFIELDS, payload.c_str());
+
+    std::string readBuffer;
+    if (get_response) {
+        curl_easy_setopt(curl, CURLOPT_WRITEFUNCTION, CurlHandler::WriteCallback);
+        curl_easy_setopt(curl, CURLOPT_WRITEDATA, &readBuffer);
+    }
 
     CURLcode res = curl_easy_perform(curl);
     if(res != CURLE_OK) {
         throw std::runtime_error(curl_easy_strerror(res));
     }
+    
+    long http_code = 0;
+    curl_easy_getinfo(curl, CURLINFO_RESPONSE_CODE, &http_code);
 
-    curl_easy_reset(curl);
+    curl_easy_cleanup(curl);
 
-    return readBuffer;
+    return {http_code, readBuffer};
 }
 
-std::string CurlHandler::post(const std::string& url, const std::string& payload, bool get_response) {
+
+
+std::string CurlHandler::perform_curl_request(CURL* curl) {
     std::string readBuffer;
-    while (true) {
-        std::lock_guard<std::mutex> lock(curl_mutex);
-        curl_easy_setopt(curl, CURLOPT_CUSTOMREQUEST, "POST");
-        curl_easy_setopt(curl, CURLOPT_SSL_VERIFYPEER, 0L);
-        curl_easy_setopt(curl, CURLOPT_URL, url.c_str());
 
-        curl_easy_setopt(curl, CURLOPT_HTTPHEADER, headers);
-        curl_easy_setopt(curl, CURLOPT_POSTFIELDS, payload.c_str());
-
-        if (get_response) {
-            curl_easy_setopt(curl, CURLOPT_WRITEFUNCTION, WriteCallback);
-            curl_easy_setopt(curl, CURLOPT_WRITEDATA, &readBuffer);
-        }
-
-        CURLcode res = curl_easy_perform(curl);
-        long http_code = 0;
-        curl_easy_getinfo(curl, CURLINFO_RESPONSE_CODE, &http_code);
-        curl_easy_reset(curl);
-
-        if (http_code == 429) { // rate limit hit
-            nlohmann::json jsonResponse = nlohmann::json::parse(readBuffer);
-            int retryAfter = jsonResponse["retry_after"];
-            std::this_thread::sleep_for(std::chrono::milliseconds(retryAfter));
-            // Retry the request
-        } else if (res != CURLE_OK) {
-            std::string error_message = "Curl post request failed with error: ";
-            error_message += curl_easy_strerror(res);
-            throw std::runtime_error(error_message);
-        } else {
-            break; // Success, exit the loop
-        }
+    curl_easy_setopt(curl, CURLOPT_WRITEDATA, &readBuffer);
+    CURLcode res = curl_easy_perform(curl);
+    if(res != CURLE_OK) {
+        throw std::runtime_error(curl_easy_strerror(res));
     }
+
     return readBuffer;
 }
-

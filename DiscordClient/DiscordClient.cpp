@@ -1,41 +1,74 @@
 #include "DiscordClient.hpp"
 namespace discord 
 {
+
+    const int MAX_REQUESTS_PER_MINUTE = 60;
+    const int OP_HEARTBEAT = 1;
+    const int OP_IDENTIFY = 2;
+    const int OP_HELLO = 10;
+    const int OP_HEARTBEAT_ACK = 11;
+    const int GUILD_MESSAGES = (1 << 9);
+    const int MESSAGE_CONTENT  = (1 << 15);
+    const int LARGE_THRESHOLD = 250;
+
+    const int WOKRER_THREAD_COUNT = 4;
+    const int EVENT_TREAD_COUNT = 4;
+    const int TASK_THREAD_COUNT = 2;
+
     DiscordClient::DiscordClient(const std::string& bot_token, DiscordEvents::CheckIfIsAQuestion check_if_question, DiscordEvents::ResponseCallback response_callback)
-        : bot_token_(bot_token), worker_threads_count_(4), check_if_question_(check_if_question), response_callback_(response_callback), stop_threads_(false),
-        curlHandler(make_unique<CurlHandler>()) {
+        : bot_token_(bot_token), check_if_question_(check_if_question), response_callback_(response_callback),
+        curlHandler(std::make_unique<CurlHandler>()) {
         try {
-            client_handler_ptr = make_unique<websocket_handler::WebsocketClientHandler>();
+            client_handler_ptr = std::make_unique<websocket_handler::WebsocketClientHandler>();
             curlHandler->AddHeader("Authorization: Bot " + bot_token_);
             curlHandler->AddHeader("Content-Type: application/json");
 
-            event_handling_pool_ = make_unique<ThreadPool>(4);
-            worker_threads_pool_ = make_unique<ThreadPool>(worker_threads_count_);
-            task_pool_ = make_unique<ThreadPool>(2);
+            event_handling_pool_ = std::make_unique<ThreadPool>(EVENT_TREAD_COUNT);
+            worker_threads_pool_ = std::make_unique<ThreadPool>(WOKRER_THREAD_COUNT);
+            task_pool_ = std::make_unique<ThreadPool>(TASK_THREAD_COUNT);
 
+            active_threads_ = 0; 
+
+        } catch (const std::runtime_error& e) {
+            std::cerr << "Runtime error: " << e.what() << '\n';
         } catch (const std::exception& e) {
-            std::cerr << e.what() << '\n';
+            std::cerr << "Exception: " << e.what() << '\n';
+        } catch (...) {
+            std::cerr << "Unknown exception occurred" << '\n';
         }
     }
 
     void DiscordClient::run() 
     {
-        connect("wss://gateway.discord.gg/?v=10&encoding=json");
-        running_ = true;
+        try {
+            std::unique_lock<std::mutex> lk(mtx_run_);
+            lk.unlock();
+        
+            connect("wss://gateway.discord.gg/?v=10&encoding=json");
+            running_ = true;
 
-        while (running_) {
-            std::this_thread::sleep_for(std::chrono::seconds(1));
+            lk.lock();
+            while (running_) {
+                if(cv_run_.wait_for(lk, std::chrono::seconds(1), [this](){ return !running_; })) break;
+            }
+        } catch (const std::exception& e) {
+            std::cerr << "Exception in run: " << e.what() << std::endl;
+            running_ = false;
         }
     }
 
+
     void DiscordClient::stop() 
     {
-        running_ = false;   
+        running_ = false;
+        cv_run_.notify_one();   
     }
 
     DiscordClient::~DiscordClient()
     {
         stop();
+        std::unique_lock<std::mutex> lock(mtx_);
+        cv_.wait(lock, [this]{ return this->active_threads_ == 0; });
         std::cout << "DiscordClient destructor called" << std::endl;
     }
 
@@ -73,31 +106,71 @@ namespace discord
         });
     }
 
+
+    void DiscordClient::increment_request_count()
+    {
+        std::chrono::time_point<std::chrono::steady_clock> now = std::chrono::steady_clock::now();
+        std::chrono::seconds time_diff = std::chrono::duration_cast<std::chrono::seconds>(now - last_request_time_);
+
+        // Reset request count every minute
+        if (time_diff.count() >= MAX_REQUESTS_PER_MINUTE - 1) {
+            request_count_ = 0;
+            last_request_time_ = now;
+        }
+
+        request_count_++;
+    }
+
+    bool DiscordClient::can_send_request()
+    {
+        // Limit to 60 requests per minute
+        if (request_count_ >= MAX_REQUESTS_PER_MINUTE - 1) {
+            std::chrono::time_point<std::chrono::steady_clock> now = std::chrono::steady_clock::now();
+            std::chrono::seconds time_diff = std::chrono::duration_cast<std::chrono::seconds>(now - last_request_time_);
+
+            if (time_diff.count() < MAX_REQUESTS_PER_MINUTE - 1) {
+                return false;
+            }
+
+            // Reset request count if a minute has passed
+            request_count_ = 0;
+            last_request_time_ = now;
+        }
+
+        return true;
+    }
+
     void DiscordClient::process_event(const nlohmann::json& data, bool is_update)
     {
         event_handling_pool_->enqueue_task([this, data, is_update]() {
-            nlohmann::json response;
+            try {
+                nlohmann::json response;
 
-            if(is_update)
-            {
-                response = event_handler_.on_message_update(data);
-
-                if(response.is_null())
+                if(is_update)
                 {
-                    std::cerr << "Error: on_message_update returned a null JSON object" << std::endl;
-                    return;
+                    response = event_handler_.on_message_update(data);
+                }
+                else
+                {
+                    response = event_handler_.on_message_create(data, check_if_question_, response_callback_);
+                }
+
+                if(!response.empty())
+                {
+                    std::lock_guard<std::mutex> lock(mutex_);
+                    event_queue_.push(response);
+                    condition_variable_.notify_one();
                 }
             }
-
-            response = event_handler_.on_message_create(is_update ? response : data, check_if_question_, response_callback_);
-
-            if(!response.empty())
-            {
-                std::lock_guard<std::mutex> lock(mutex_);
-                event_queue_.push(response);
-                condition_variable_.notify_one();
+            catch (const std::exception& e) {
+                std::cerr << "Exception processing event: " << e.what() << std::endl;
             }
-        });   
+            std::lock_guard<std::mutex> lock(mtx_);
+            --active_threads_;
+            if (active_threads_ == 0) cv_.notify_all();
+        });
+        std::lock_guard<std::mutex> lock(mtx_);
+        ++active_threads_;  
     }
 
     void DiscordClient::setup_event_handler() 
@@ -110,37 +183,49 @@ namespace discord
             process_event(data, true);
         });
 
-
         event_handler_.register_event_handler("MESSAGE_DELETE", [this](const nlohmann::json& data) {
-            event_handler_.on_message_delete(data);
+            nlohmann::json response = event_handler_.on_message_delete(data);
+            if(!response.empty())
+            {
+                std::lock_guard<std::mutex> lock(mutex_);
+                event_queue_.push(response);
+                condition_variable_.notify_one();
+            }
         });
     }
 
     void DiscordClient::start_worker_threads()
     {
-        for (unsigned int i = 0; i < worker_threads_count_; ++i) {
+        for (unsigned int i = 0; i < WOKRER_THREAD_COUNT; ++i) {
             worker_threads_pool_->enqueue_task([this]() {
-                while (true)
+                while (running_)
                 {
                     std::unique_lock<std::mutex> lock(mutex_);
                     condition_variable_.wait(lock, [this]() {
-                        return !event_queue_.empty() || stop_threads_;
+                        return !event_queue_.empty() || !running_;
                     });
 
-                    if (stop_threads_) {
+                    if (!running_) {
                         return;
                     }
 
-                    nlohmann::json event_data = event_queue_.front();
-                    event_queue_.pop();
-                    lock.unlock();
-                    if (!event_data.is_null()) {
-                        if (event_data.value("action", "NOT FOUND") == "send_message") {
-                            send_message(event_data.value("channel_id", "NOT FOUND"), event_data.value("content", "NOT FOUND"), event_data.value("message_id", "NOT FOUND"));
+                    if (!event_queue_.empty()) {
+                        nlohmann::json event_data = event_queue_.front();
+                        event_queue_.pop();
+                        lock.unlock();
+                        if (!event_data.is_null()) {
+                            if (event_data.value("action", "NOT FOUND") == "send_message") {
+                                send_message(event_data.value("channel_id", "NOT FOUND"), event_data.value("content", "NOT FOUND"), event_data.value("message_id", "NOT FOUND"));
+                            }
                         }
                     }
                 }
+                std::lock_guard<std::mutex> lock(mtx_);
+                --active_threads_;
+                if (active_threads_ == 0) cv_.notify_all();
             });
+            std::lock_guard<std::mutex> lock(mtx_);
+            ++active_threads_;
         }
 
         std::cout << "Discord bot connected" << std::endl;
@@ -151,9 +236,9 @@ namespace discord
         {
             auto payload = nlohmann::json::parse(raw_payload);
 
-            if (payload["op"] == 11) {
+            if (payload["op"] == OP_HEARTBEAT_ACK) {
                 std::cout << "Received Heartbeat Acknowledgement" << std::endl;
-            } else if (payload["op"] == 10) { // Opcode 10: Hello
+            } else if (payload["op"] == OP_HELLO) { // Opcode 10: Hello
                 int heartbeat_interval = payload["d"]["heartbeat_interval"];
                 start_heartbeat_thread(heartbeat_interval);
             } else if (payload["t"] == "READY") {
@@ -177,11 +262,11 @@ namespace discord
         }
 
         task_pool_->enqueue_task([this, interval_ms]() {
-            while (!stop_threads_) {
+            while (running_) {
                 std::cout << "Heartbeat thread sleeping for " << interval_ms << " milliseconds" << std::endl;
                 std::this_thread::sleep_for(std::chrono::milliseconds(interval_ms));
                 nlohmann::json heartbeat_payload;
-                heartbeat_payload["op"] = 1; // Opcode for Heartbeat
+                heartbeat_payload["op"] = OP_HEARTBEAT; // Opcode for Heartbeat
                 heartbeat_payload["d"] = last_sequence_;
 
                 if (client_handler_ptr->is_connected()) {
@@ -193,7 +278,12 @@ namespace discord
                     std::cout << "Websocket not connected, unable to send heartbeat." << std::endl;
                 }
             }
+            std::lock_guard<std::mutex> lock(mtx_);
+            --active_threads_;
+            if (active_threads_ == 0) cv_.notify_all();
         });
+        std::lock_guard<std::mutex> lock(mtx_);
+        ++active_threads_;
     }
 
 
@@ -202,17 +292,17 @@ namespace discord
         task_pool_->enqueue_task([this]() {
             std::cout << "Identifying..." << std::endl;
             nlohmann::json identify_payload{
-                {"op", 2},
+                {"op", OP_IDENTIFY},
                 {"d", {
                     {"token", bot_token_},
-                    {"intents", (1 << 9) | (1 << 15)}, // Add the GUILD_MESSAGES and MESSAGE_CONTENT intents
+                    {"intents", GUILD_MESSAGES | MESSAGE_CONTENT}, // Add the GUILD_MESSAGES and MESSAGE_CONTENT intents
                     {"properties", {
                         {"$os", "linux"},
                         {"$browser", "disco"},
                         {"$device", "disco"}
                     }},
                     {"compress", false},
-                    {"large_threshold", 250},
+                    {"large_threshold", LARGE_THRESHOLD},
                     {"shard", {0, 1}}
                 }}
             };
@@ -226,8 +316,12 @@ namespace discord
             {
                 std::cout << "Identify payload sent error." << std::endl;
             }
+            std::lock_guard<std::mutex> lock(mtx_);
+            --active_threads_;
+            if (active_threads_ == 0) cv_.notify_all();
         });
-
+        std::lock_guard<std::mutex> lock(mtx_);
+        ++active_threads_;
         {
             std::unique_lock<std::mutex> lock(heartbeat_mutex_);
             identify_started_ = true;
@@ -238,16 +332,21 @@ namespace discord
     void DiscordClient::reconnect(const std::string& uri) {
         std::cout << "Reconnecting..." << std::endl;
         client_handler_ptr.reset();
-        client_handler_ptr = make_unique<websocket_handler::WebsocketClientHandler>(); 
         std::this_thread::sleep_for(std::chrono::seconds(5));
         connect(uri);
     }
     
     void DiscordClient::send_message(const std::string& channel_id, const std::string& message, const std::string& message_id)
     {
+        if (!can_send_request()) {
+            std::cerr << "Rate limit exceeded, cannot send message at this time" << std::endl;
+            return;
+        }
+
+        increment_request_count();
+
         std::string url = "https://discord.com/api/v10/channels/" + channel_id + "/messages";
 
-        // Include the message_reference field in the JSON payload
         nlohmann::json payload = {
             {"content", message},
             {"message_reference", {
@@ -255,9 +354,22 @@ namespace discord
             }}
         };
 
-        // Serialize the payload to a string
         std::string data = payload.dump();
-        curlHandler->post(url, data, false);
+
+        curlHandler->enqueue_request([=]() {
+            try {
+                CurlHandler::Response response = curlHandler->post(url, data, false);
+                if (response.http_code != 200) {
+                    std::cerr << "HTTP Error: " << response.http_code << " for message: " << message << std::endl;
+                }
+            }
+            catch (const std::exception& e) {
+                std::cerr << "Exception sending message: " << e.what() << std::endl;
+            }
+            catch (...) {
+                std::cerr << "Unknown exception sending message" << std::endl;
+            }
+        });
     }
 
 }

@@ -7,11 +7,7 @@ Worker::Worker(): stop_(false) {
 
 Worker::~Worker() {
     std::cout << "Worker destructor called" << std::endl;
-    {
-        std::lock_guard<std::mutex> lock(stop_mutex_);
-        stop_ = true;
-    }
-    tasks_cv_.notify_all();  // wake up the thread if it's waiting on the condition variable
+    stop();
     if (thread_.joinable())
         thread_.join();
 }
@@ -23,10 +19,12 @@ void Worker::join() {
 }
 
 void Worker::stop() {
-    std::lock_guard<std::mutex> lock(stop_mutex_);
-    stop_ = true;
+    {
+        std::lock_guard<std::mutex> lock(stop_mutex_);
+        stop_ = true;
+    }
+    tasks_cv_.notify_all();
 }
-
 
 void Worker::enqueue_task(std::function<void()> task) {
     {
@@ -35,7 +33,6 @@ void Worker::enqueue_task(std::function<void()> task) {
     }
     tasks_cv_.notify_one();
 }
-
 
 void Worker::run() {
     while (true) {
@@ -48,11 +45,10 @@ void Worker::run() {
             });
 
             if(stop_ && tasks_.empty()) return;
-            
+
             task = std::move(tasks_.front());
             tasks_.pop();
         }
         task();
     }
 }
-

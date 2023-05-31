@@ -3,9 +3,10 @@
 
 #include <string>
 #include <memory>
+#include <atomic>
 #include "OpenAIClient/OpenAIClient.hpp"
 #include "DiscordClient/DiscordClient.hpp"
-#include "utilities/utilities.hpp"
+#include "ThreadPool/ThreadPool.hpp"
 
 class BrainyBuddy
 {
@@ -13,6 +14,9 @@ public:
     BrainyBuddy();
     ~BrainyBuddy();
     void run();
+    
+    void cleanup();
+    static BrainyBuddy* getInstance(); 
 
 private:
     std::string bot_token_;
@@ -22,6 +26,10 @@ private:
 
     bool check_if_question(const std::string &input);
     std::string get_openai_response(const std::string &input,const std::string &author_username);
+
+    std::mutex mtx_;
+    ThreadPool threadPool;
+    static std::atomic<bool> quit_;
 };
 
 #endif // BRAINY_BUDDY_HPP

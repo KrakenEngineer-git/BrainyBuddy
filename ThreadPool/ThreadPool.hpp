@@ -12,7 +12,6 @@
 class ThreadPool {
 public:
     ThreadPool(size_t num_workers);
-
     ~ThreadPool();
 
     void enqueue_task(std::function<void()> task);

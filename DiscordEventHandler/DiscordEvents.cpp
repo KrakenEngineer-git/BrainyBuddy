@@ -24,7 +24,7 @@ nlohmann::json DiscordEvents::on_message_create(const nlohmann::json& data,Check
     {
         std::cout << "User: " << username << "Send: " <<  content << std::endl;
 
-        std::string response = "";
+        std::string response;
 
         bool is_question =  check_if_question(content);
 

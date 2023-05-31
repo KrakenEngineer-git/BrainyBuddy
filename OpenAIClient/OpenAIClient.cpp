@@ -9,6 +9,7 @@ constexpr int MAX_TOKENS = 200;
 constexpr double TEMPERATURE = 0.8;
 constexpr int MAX_RETRIES = 5;
 constexpr float SIMILARITY_THRESHOLD = 0.65f; 
+constexpr int CURL_THREADS_NUMBER = 2;
 
 OpenAIClient::OpenAIClient(const std::string &api_key) : api_key_(api_key)
 {
@@ -17,28 +18,38 @@ OpenAIClient::OpenAIClient(const std::string &api_key) : api_key_(api_key)
     generateExampleEmbeddings();
 }
 
+OpenAIClient::~OpenAIClient()
+{
+    std::cout << "OpenAIClient destructor called" << std::endl;
+}
+
 void OpenAIClient::setupCurlHandler()
 {
-    curl_handler_ = make_unique<CurlHandler>();
+    curl_handler_ = std::make_unique<CurlHandler>();
     curl_handler_->AddHeader("Authorization: Bearer " + api_key_);
     curl_handler_->AddHeader("Content-Type: application/json");
 }
 
 void OpenAIClient::setupThreadPool()
 {
-    thread_pool_ = make_unique<ThreadPool>(4);
+    thread_pool_ = std::make_unique<ThreadPool>(4);
 }
 
 void OpenAIClient::generateExampleEmbeddings()
 {
     for (const auto &example : question_examples_)
     {
-        example_question_embeddings_.push_back(getTextEmbedding(example));
+        try {
+            example_question_embeddings_.push_back(getTextEmbedding(example));
+        } catch (const std::exception& e) {
+            std::cerr << "Error generating example embeddings: " << e.what() << std::endl;
+        }
     }
 }
 
-std::string OpenAIClient::generate_response(const std::string &input, const std::string &author_username)
+std::string OpenAIClient::generate_response(const std::string &input, const std::string &author_username) noexcept(false)
 {
+    std::cout<<"OpenAIClient::generate_response"<<std::endl;
     if (input.empty()) {
         throw std::invalid_argument("Input cannot be empty.");
     }
@@ -72,17 +83,19 @@ std::string OpenAIClient::generate_response(const std::string &input, const std:
     {
         auto response = enqueueTask(url, data);
 
-        nlohmann::json response_json = nlohmann::json::parse(response);
+        nlohmann::json response_json = nlohmann::json::parse(response.body);
 
-        if (response_json.contains("choices") && !response_json["choices"].empty()) {
-            auto message = response_json["choices"][0].value("message", nlohmann::json::object());
-            if (!message.empty()) {
-                generated_text += message.value("content", "");
-            }
-        }   
+        if (response_json.contains("error")) {
+            throw std::runtime_error("Error from the API: " + response_json["error"].get<std::string>());
+        }
 
-        if (generated_text.empty() || generated_text.back() == '.' || generated_text.back() == '?' || generated_text.back() == '!')
-        {
+        if (!response_json.contains("choices") || response_json["choices"].empty()) {
+            throw std::runtime_error("Unexpected response from the API");
+        }  
+
+        generated_text += response_json["choices"][0]["message"]["content"].get<std::string>();
+
+        if (generated_text.empty() || generated_text.back() == '.' || generated_text.back() == '?' || generated_text.back() == '!') {
             break;
         }
 
@@ -93,27 +106,24 @@ std::string OpenAIClient::generate_response(const std::string &input, const std:
     return generated_text;
 }
 
-std::string OpenAIClient::enqueueTask(const std::string &url, const std::string &data)
+CurlHandler::Response OpenAIClient::enqueueTask(const std::string &url, const std::string &data)
 {
-    std::promise<std::string> response_promise;
-    std::future<std::string> response_future = response_promise.get_future();
-    
-    thread_pool_->enqueue_task([this, &url, &data, &response_promise]() {
+    std::lock_guard<std::mutex> lock(curl_handler_mutex_);
+    std::shared_ptr<std::promise<CurlHandler::Response>> response_promise = std::make_shared<std::promise<CurlHandler::Response>>();
+    std::future<CurlHandler::Response> response_future = response_promise->get_future();
+
+    curl_handler_->enqueue_request([this, url, data, response_promise]() {
         try {
-            std::string response = curl_handler_->post(url, data, true);
-            response_promise.set_value(response);
+            CurlHandler::Response response = this->curl_handler_->post(url, data, true);
+            response_promise->set_value(response);
         } catch (const std::exception &e) {
-            response_promise.set_exception(std::current_exception());
+            response_promise->set_exception(std::current_exception());
         }
     });
-
-    try {
-        return response_future.get();
-    } catch (const std::exception &e) {
-        std::cerr << "Error in task: " << e.what() << std::endl;
-        throw;
-    }
+    return response_future.get();
 }
+
+
 
 bool OpenAIClient::is_question(const std::string &input)
 {
@@ -147,9 +157,15 @@ bool OpenAIClient::isQuestionBasedOnKeywords(const std::string &input)
     std::transform(lower_input.begin(), lower_input.end(), lower_input.begin(), ::tolower);
     const std::vector<std::string> question_words = {"what", "how", "where", "when", "why", "who", "which", "is", "are", "do", "does", "did", "can", "could", "would", "will", "shall", "explain", "define", "describe"};
 
+    lower_input = lower_input.substr(lower_input.find_first_not_of(' '));
     std::stringstream input_stream(lower_input);
     std::string first_word;
     input_stream >> first_word;
+
+    if (first_word.empty())
+    {
+        return false;
+    }
 
     for (const auto &word : question_words)
     {
@@ -186,10 +202,10 @@ std::vector<float> OpenAIClient::getTextEmbedding(const std::string &text)
     };
 
     std::string data = payload.dump();
-    std::string response = enqueueTask(url, data);
+    auto response = enqueueTask(url, data);
 
     try {
-        nlohmann::json response_json = nlohmann::json::parse(response);
+        nlohmann::json response_json = nlohmann::json::parse(response.body);
         if (response_json.contains("data") && !response_json["data"].empty()) {
             auto embedding_json = response_json["data"][0].value("embedding", nlohmann::json::object());
             if (!embedding_json.empty()) {

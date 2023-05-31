@@ -4,13 +4,14 @@
 
 #include <string>
 #include "CurlHandler/CurlHandler.hpp"
-#include "utilities/utilities.hpp"
 #include "ThreadPool/ThreadPool.hpp"
+#include <mutex>
 
 class OpenAIClient
 {
 public:
     OpenAIClient(const std::string &api_key);
+    ~OpenAIClient();
     std::string generate_response(const std::string &input,const std::string &author_username);
     bool is_question(const std::string &input);
 
@@ -18,7 +19,7 @@ private:
     void setupCurlHandler();
     void setupThreadPool();
     void generateExampleEmbeddings();
-    std::string enqueueTask(const std::string &url, const std::string &data);
+    CurlHandler::Response enqueueTask(const std::string &url, const std::string &data);
     bool isQuestionBasedOnPunctuation(const std::string &input);
     bool isQuestionBasedOnKeywords(const std::string &input);
     bool isQuestionBasedOnEmbeddings(const std::string &input);
@@ -57,6 +58,7 @@ private:
     };
 
     std::unique_ptr<ThreadPool> thread_pool_;
+    std::mutex curl_handler_mutex_;
 
 };
 

@@ -9,7 +9,6 @@ cc_library(
         ":discord_event",
     ],
     copts = [
-        "-std=c++11",
         "-Iexternal/nlohmann_json/include",
     ],
     visibility = ["//visibility:public"],
@@ -26,7 +25,6 @@ cc_library(
         "@nlohmann_json//:nlohmann_json", 
     ],
     copts = [
-        "-std=c++11",
         "-Iexternal/nlohmann_json/include",
     ],
     visibility = ["//visibility:public"],
